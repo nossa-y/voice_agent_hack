@@ -27,7 +27,7 @@
     },
     {
       "role": "assistant",
-      "content": "\u2713 Hi Marcus, this is Alex from SyncFlow. I saw that your lead data engineer just quit and wanted to check in on how the Airbyte pipelines are holding up without them. Just to confirm,"
+      "content": "\u2713 Hi Marcus, this is Alex from ColdLoop. I saw that your lead data engineer just quit and wanted to check in on how the Airbyte pipelines are holding up without them. Just to confirm,"
     },
     {
       "role": "assistant",

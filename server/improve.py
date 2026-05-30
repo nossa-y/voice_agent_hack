@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Self-improvement loop for the SyncFlow sales agent.
+"""Self-improvement loop for the ColdLoop sales agent.
 
 Reads call transcripts, analyzes performance via Cekura evaluations and
 Nemotron self-reflection, then generates an improved system prompt.
@@ -179,7 +179,7 @@ RULES FOR THE IMPROVED PROMPT:
 - Remove or soften rules that caused problems.
 - Keep it under 2000 words. Concise prompts perform better.
 - Include today's date: {date.today().strftime('%A, %B %d, %Y')}.
-- The prompt must start with "You are Alex, a sales development rep at SyncFlow."
+- The prompt must start with "You are Alex, a sales development rep at ColdLoop."
 - Do NOT include any meta-commentary or explanation. ONLY output the improved prompt.
 
 OUTPUT FORMAT:
@@ -192,7 +192,7 @@ CHANGES:
 - Softened the opener to be less aggressive
 - Added fallback for when prospect mentions unknown competitors
 ===PROMPT===
-You are Alex, a sales development rep at SyncFlow...
+You are Alex, a sales development rep at ColdLoop...
 """
 
     print("Calling Nemotron for self-reflection...")
@@ -240,7 +240,7 @@ def setup_cekura_agent(client, project_id: int, agent_name: str, pipecat_bot_url
     result = client.agents.create(
         agent_name=agent_name,
         description=(
-            "SyncFlow outbound sales agent. Makes cold calls to prospects, "
+            "ColdLoop outbound sales agent. Makes cold calls to prospects, "
             "qualifies their data pipeline needs, handles objections, and books demos."
         ),
         project=project_id,
@@ -421,7 +421,7 @@ def run_cekura_improvement():
     if isinstance(projects, dict):
         projects = projects.get("results", [])
     if not projects:
-        project = client.projects.create(name="SyncFlow Sales Agent")
+        project = client.projects.create(name="ColdLoop Sales Agent")
         project_id = project["id"]
     else:
         project_id = projects[0]["id"] if isinstance(projects[0], dict) else projects[0]
@@ -429,7 +429,7 @@ def run_cekura_improvement():
 
     # Setup agent
     pipecat_bot_url = os.environ.get("PIPECAT_BOT_URL", "sales-bot")
-    agent_id = setup_cekura_agent(client, project_id, "SyncFlow Sales Bot", pipecat_bot_url)
+    agent_id = setup_cekura_agent(client, project_id, "ColdLoop Sales Bot", pipecat_bot_url)
 
     # Generate or load scenarios
     scenario_ids = generate_sales_scenarios(client, agent_id, project_id)
@@ -519,7 +519,7 @@ def show_status():
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="SyncFlow sales agent self-improvement loop")
+    parser = argparse.ArgumentParser(description="ColdLoop sales agent self-improvement loop")
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument("--local", action="store_true", help="Improve using local transcripts only")
     group.add_argument("--cekura", action="store_true", help="Full loop with Cekura evaluation")

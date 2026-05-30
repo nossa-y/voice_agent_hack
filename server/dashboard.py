@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""SyncFlow Sales Agent - Self-Improvement Dashboard.
+"""ColdLoop Sales Agent - Self-Improvement Dashboard.
 
 Visual interface for the hackathon demo. Shows prompt evolution,
 Cekura scores, diffs, and links to the live agent.
@@ -27,7 +27,7 @@ TRANSCRIPT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "trans
 SCENARIO_IDS = [272894, 272893, 272892, 272891, 272890]
 CEKURA_API_KEY = os.environ.get("CEKURA_API_KEY", "")
 
-app = FastAPI(title="SyncFlow Dashboard")
+app = FastAPI(title="ColdLoop Dashboard")
 
 
 # --- API Endpoints -----------------------------------------------------------
@@ -199,7 +199,7 @@ async def run_improvement():
             f"CURRENT PROMPT:\n---\n{current_prompt}\n---\n\n"
             f"TEST RESULTS (success rate: {success_rate}%):\n---\n{feedback}\n---\n\n"
             "Generate an improved prompt. Fix the failures. Keep what works.\n"
-            "Rules: Under 2000 words. Start with 'You are Alex, a sales development rep at SyncFlow.'\n"
+            "Rules: Under 2000 words. Start with 'You are Alex, a sales development rep at ColdLoop.'\n"
             f"Include today: {date.today().strftime('%A, %B %d, %Y')}.\n\n"
             "Output: CHANGES (3-5 bullets), then ===PROMPT===, then the full improved prompt."
         )
@@ -275,7 +275,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SyncFlow - Self-Improving Sales Agent</title>
+<title>ColdLoop - Self-Improving Sales Agent</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -353,7 +353,7 @@ tailwind.config = {
     <div class="flex items-center gap-3">
       <div class="flex items-center gap-2">
         <svg width="28" height="28" viewBox="0 0 28 28" fill="none"><circle cx="14" cy="14" r="12" stroke="#1a1a1a" stroke-width="2"/><path d="M9 14l3 3 7-7" stroke="#1a1a1a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        <span class="text-lg font-bold text-ink tracking-tight">SyncFlow</span>
+        <span class="text-lg font-bold text-ink tracking-tight">ColdLoop</span>
       </div>
       <span class="text-ink-muted text-sm hidden sm:inline">Self-Improving Sales Agent</span>
     </div>
@@ -377,7 +377,7 @@ tailwind.config = {
       An AI sales agent that rewrites<br>its own playbook.
     </h1>
     <p class="mt-4 text-lg text-ink-light max-w-2xl leading-relaxed">
-      SyncFlow runs sales calls, evaluates performance with Cekura, reflects with Nemotron, and generates an improved prompt. Automatically. Watch it evolve.
+      ColdLoop runs sales calls, evaluates performance with Cekura, reflects with Nemotron, and generates an improved prompt. Automatically. Watch it evolve.
     </p>
   </section>
 
@@ -471,7 +471,7 @@ tailwind.config = {
     <!-- Try the Agent -->
     <div class="glass p-6">
       <h2 class="text-base font-semibold text-ink mb-4">Talk to the Agent</h2>
-      <p class="text-sm text-ink-light mb-5">Connect via WebRTC and have a live sales conversation. The agent pitches SyncFlow as a random prospect persona.</p>
+      <p class="text-sm text-ink-light mb-5">Connect via WebRTC and have a live sales conversation. The agent pitches ColdLoop as a random prospect persona.</p>
       <a href="http://localhost:7860" target="_blank" class="btn-primary inline-flex items-center gap-2 px-6 py-3 rounded-xl text-ink font-semibold text-sm">
         <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 1a7 7 0 100 14A7 7 0 008 1z" stroke="currentColor" stroke-width="1.5"/><path d="M6.5 5l4 3-4 3V5z" fill="currentColor"/></svg>
         Open Voice Agent
@@ -560,7 +560,7 @@ tailwind.config = {
 <footer class="border-t border-surface-300/50 py-6">
   <div class="max-w-7xl mx-auto px-6 flex flex-col sm:flex-row items-center justify-between text-xs text-ink-muted gap-2">
     <span>Built at YC Voice Agents Hackathon - Pipecat + Cekura + NVIDIA Nemotron</span>
-    <span>By Nossa Iyamu</span>
+    <span>by SyncFlow team</span>
   </div>
 </footer>
 

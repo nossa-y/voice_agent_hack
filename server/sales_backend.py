@@ -1,11 +1,11 @@
 #
-# SyncFlow Sales Agent — Mock backend data
+# ColdLoop Sales Agent — Mock backend data
 #
 # Swap these dicts with real API calls when moving beyond the hackathon demo.
 # Prospect personas are selected randomly per call to keep demos varied.
 #
 
-"""Mock backend data for the SyncFlow sales agent demo.
+"""Mock backend data for the ColdLoop sales agent demo.
 
 This file exports product information, competitor comparisons, and prospect
 personas used by the sales agent bot. All data is fictional and designed
@@ -17,10 +17,10 @@ Edit COMPETITORS to update competitive positioning.
 """
 
 SYNCFLOW_PRODUCT = {
-    "name": "SyncFlow",
+    "name": "ColdLoop",
     "tagline": "Data pipelines that build themselves",
     "description": (
-        "SyncFlow is a data pipeline platform for mid-market ops teams. "
+        "ColdLoop is a data pipeline platform for mid-market ops teams. "
         "Connect any source to any destination, transform data with plain "
         "English rules, and monitor pipeline health from one dashboard. "
         "No engineering backlog required."
@@ -41,7 +41,7 @@ SYNCFLOW_PRODUCT = {
         "transformations": {
             "name": "Plain English Transforms",
             "detail": (
-                "Write transformation rules in plain English. SyncFlow's AI "
+                "Write transformation rules in plain English. ColdLoop's AI "
                 "translates them into optimized SQL. No dbt, no data engineering "
                 "hire required."
             ),
@@ -154,7 +154,7 @@ COMPETITORS = {
         "talk_track": (
             "Airbyte's great if you have engineers who want to self-host and maintain "
             "pipelines. For ops teams who want it to just work without a DevOps hire, "
-            "SyncFlow is the better fit."
+            "ColdLoop is the better fit."
         ),
     },
     "stitch": {
@@ -170,7 +170,7 @@ COMPETITORS = {
         ],
         "talk_track": (
             "Stitch hasn't seen much investment since Talend acquired them. If you're "
-            "evaluating options, you'll find SyncFlow is more actively developed with "
+            "evaluating options, you'll find ColdLoop is more actively developed with "
             "better real-time capabilities."
         ),
     },

@@ -1,12 +1,12 @@
 #
-# SyncFlow Sales Agent — self-improving outbound SDR bot (hackathon build).
+# ColdLoop Sales Agent — self-improving outbound SDR bot (hackathon build).
 #
 # SPDX-License-Identifier: BSD 2-Clause License
 #
 
-"""SyncFlow Sales Agent — AI SDR voice bot.
+"""ColdLoop Sales Agent — AI SDR voice bot.
 
-An outbound sales agent that pitches SyncFlow (a fictional data pipeline
+An outbound sales agent that pitches ColdLoop (a fictional data pipeline
 platform) to prospects. Each call selects a random prospect persona for
 varied demos. The agent qualifies, handles objections, and books demos.
 
@@ -141,13 +141,13 @@ def save_transcript(
 def build_default_system_instruction() -> str:
     """Build the default (v0) system instruction for the sales agent."""
     return (
-        "You are Alex, a sales development rep at SyncFlow. You are making an "
+        "You are Alex, a sales development rep at ColdLoop. You are making an "
         "outbound call to a prospect. Your goal is to have a natural conversation, "
         "understand their data pipeline challenges, and book a 20-minute demo with "
         "a solutions engineer.\n\n"
         "You are NOT an AI assistant. You are a human SDR named Alex. Never say "
         "you're an AI, a bot, or a virtual assistant. If asked directly, deflect "
-        'naturally: "I\'m Alex from SyncFlow, just reaching out about your data '
+        'naturally: "I\'m Alex from ColdLoop, just reaching out about your data '
         'pipeline setup."\n\n'
         "This is an OUTBOUND call. You called them. Do not ask 'how can I help you' "
         "or 'what can I do for you.' You initiated this call for a reason.\n\n"
@@ -159,7 +159,7 @@ def build_default_system_instruction() -> str:
         "3. Pain amplification: When they mention a problem, ask about the impact. "
         "'How much time does that cost your team each week?' 'What happens downstream "
         "when that pipeline breaks?'\n"
-        "4. Pitch (only after discovering pain): Connect SyncFlow features directly "
+        "4. Pitch (only after discovering pain): Connect ColdLoop features directly "
         "to their specific pain points. Use get_product_details to get accurate info. "
         "Never list features they didn't ask about.\n"
         "5. Handle objections calmly. Acknowledge, then address. Use check_competitor "
@@ -295,9 +295,9 @@ async def run_bot(
         params: FunctionCallParams,
         feature: str | None = None,
     ) -> None:
-        """Get details about SyncFlow's product, features, or pricing.
+        """Get details about ColdLoop's product, features, or pricing.
 
-        Use this when the prospect asks what SyncFlow does, about specific
+        Use this when the prospect asks what ColdLoop does, about specific
         capabilities, or about pricing. If they mention a specific area of
         interest, pass the feature name to get targeted details.
 
@@ -355,7 +355,7 @@ async def run_bot(
                 "competitor": competitor_name,
                 "note": (
                     f"We don't have specific competitive data on {competitor_name}. "
-                    "Focus on SyncFlow's core differentiators: 200+ connectors, "
+                    "Focus on ColdLoop's core differentiators: 200+ connectors, "
                     "plain English transforms with no dbt required, built-in monitoring, "
                     "and sub-minute sync latency. Ask the prospect what they like most "
                     "about their current tool to understand what matters to them."
@@ -367,7 +367,7 @@ async def run_bot(
         date: str,
         time: str,
     ) -> None:
-        """Book a demo meeting with a SyncFlow solutions engineer. Only call
+        """Book a demo meeting with a ColdLoop solutions engineer. Only call
         this after the prospect has agreed to a demo and confirmed a date and
         time.
 
@@ -388,7 +388,7 @@ async def run_bot(
             "confirmation_code": confirmation,
             "date": date,
             "time": time,
-            "meeting_type": "20-minute product demo with a SyncFlow solutions engineer",
+            "meeting_type": "20-minute product demo with a ColdLoop solutions engineer",
             "note": (
                 "A calendar invite will be sent to their email. The solutions engineer "
                 "will prepare a demo tailored to their specific use case."
@@ -596,7 +596,7 @@ async def bot(runner_args: RunnerArguments):
             transport = DailyTransport(
                 runner_args.room_url,
                 runner_args.token,
-                "SyncFlow Sales Bot",
+                "ColdLoop Sales Bot",
                 DailyParams(
                     audio_in_enabled=True,
                     audio_in_filter=krisp_filter,
