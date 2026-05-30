@@ -144,6 +144,32 @@ async def get_scenarios():
         return {"scenarios": [], "error": str(e)}
 
 
+@app.post("/api/start-session")
+async def start_session():
+    """Start a Pipecat Cloud session and return Daily room URL for embedding."""
+    import httpx
+    try:
+        pipecat_key = "pk_f3f0aa23-28ac-4b3b-88ca-9e7c57789c8d"
+        async with httpx.AsyncClient() as client:
+            resp = await client.post(
+                "https://api.pipecat.daily.co/v1/public/sales-bot/start",
+                headers={
+                    "Authorization": f"Bearer {pipecat_key}",
+                    "Content-Type": "application/json",
+                },
+                json={"createDailyRoom": True},
+                timeout=30,
+            )
+            data = resp.json()
+        return {
+            "room_url": data.get("dailyRoom"),
+            "token": data.get("dailyToken"),
+            "session_id": data.get("sessionId"),
+        }
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
 @app.post("/api/improve")
 async def run_improvement():
     """Run the full improvement loop: Cekura test -> Nemotron reflection -> save."""
@@ -362,9 +388,9 @@ tailwind.config = {
         <div class="pulse-dot"></div>
         <span class="text-xs text-ink-muted" id="headerVersion">Agent Live</span>
       </div>
-      <a href="http://localhost:7860" target="_blank" class="btn-primary px-4 py-2 rounded-xl text-sm font-medium">
+      <button onclick="startCall()" id="callBtn" class="btn-primary px-4 py-2 rounded-xl text-sm font-medium">
         Try the Agent
-      </a>
+      </button>
     </div>
   </div>
 </header>
@@ -468,22 +494,31 @@ tailwind.config = {
   <!-- Two Column: Try Agent + Architecture -->
   <section class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
 
-    <!-- Try the Agent -->
+    <!-- Try the Agent (embedded) -->
     <div class="glass p-6">
       <h2 class="text-base font-semibold text-ink mb-4">Talk to the Agent</h2>
-      <p class="text-sm text-ink-light mb-5">Connect via WebRTC and have a live sales conversation. The agent pitches ColdLoop as a random prospect persona.</p>
-      <a href="http://localhost:7860" target="_blank" class="btn-primary inline-flex items-center gap-2 px-6 py-3 rounded-xl text-ink font-semibold text-sm">
-        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 1a7 7 0 100 14A7 7 0 008 1z" stroke="currentColor" stroke-width="1.5"/><path d="M6.5 5l4 3-4 3V5z" fill="currentColor"/></svg>
-        Open Voice Agent
-      </a>
-      <div class="mt-6 grid grid-cols-2 gap-3">
+      <div id="callArea">
+        <p class="text-sm text-ink-light mb-5">Connect via WebRTC and have a live sales conversation. The agent pitches ColdLoop as a random prospect persona.</p>
+        <button onclick="startCall()" id="callBtn2" class="btn-primary inline-flex items-center gap-2 px-6 py-3 rounded-xl text-ink font-semibold text-sm">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 1a7 7 0 100 14A7 7 0 008 1z" stroke="currentColor" stroke-width="1.5"/><path d="M6.5 5l4 3-4 3V5z" fill="currentColor"/></svg>
+          Start Call
+        </button>
+        <p id="callStatus" class="text-xs text-ink-muted mt-3 hidden"></p>
+      </div>
+      <div id="callEmbed" class="hidden">
+        <iframe id="callFrame" allow="microphone; camera; autoplay;" style="width:100%; height:400px; border:none; border-radius:12px; background:#000;"></iframe>
+        <button onclick="endCall()" class="mt-3 px-4 py-2 rounded-lg text-xs font-medium bg-red-600 hover:bg-red-500 text-white transition">
+          End Call
+        </button>
+      </div>
+      <div class="mt-5 grid grid-cols-2 gap-3">
         <div class="p-3 rounded-xl bg-surface-100 border border-surface-300/50">
           <p class="text-xs font-semibold text-ink">Sarah Chen</p>
           <p class="text-xs text-ink-muted">VP RevOps, Meridian Analytics</p>
         </div>
         <div class="p-3 rounded-xl bg-surface-100 border border-surface-300/50">
           <p class="text-xs font-semibold text-ink">Marcus Johnson</p>
-          <p class="text-xs text-ink-muted">Head of Data, GreenPath Logistics</p>
+          <p class="text-xs text-ink-muted">Head of Data, GreenPath</p>
         </div>
         <div class="p-3 rounded-xl bg-surface-100 border border-surface-300/50">
           <p class="text-xs font-semibold text-ink">Priya Patel</p>
@@ -728,6 +763,52 @@ async function runImprove() {
 
 loadData();
 setInterval(loadData, 30000);
+
+async function startCall() {
+  const btn = document.getElementById('callBtn');
+  const btn2 = document.getElementById('callBtn2');
+  const status = document.getElementById('callStatus');
+  const area = document.getElementById('callArea');
+  const embed = document.getElementById('callEmbed');
+  const frame = document.getElementById('callFrame');
+
+  if (btn) { btn.disabled = true; btn.textContent = 'Connecting...'; }
+  if (btn2) { btn2.disabled = true; btn2.textContent = 'Connecting...'; }
+  if (status) { status.classList.remove('hidden'); status.textContent = 'Starting session...'; }
+
+  try {
+    const res = await fetch('/api/start-session', { method: 'POST' });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+
+    // Embed Daily prebuilt UI
+    const roomUrl = data.room_url;
+    const token = data.token;
+    frame.src = roomUrl + '?t=' + token + '&prejoin=false';
+    area.querySelector('p').classList.add('hidden');
+    if (btn2) btn2.classList.add('hidden');
+    embed.classList.remove('hidden');
+    if (status) { status.classList.remove('hidden'); status.textContent = 'Connected - speak to the agent!'; }
+  } catch (e) {
+    if (status) { status.classList.remove('hidden'); status.innerHTML = '<span class="text-red-400">Failed: ' + e.message + '</span>'; }
+  }
+  if (btn) { btn.disabled = false; btn.textContent = 'Try the Agent'; }
+  if (btn2) { btn2.disabled = false; btn2.textContent = 'Start Call'; }
+}
+
+function endCall() {
+  const frame = document.getElementById('callFrame');
+  const embed = document.getElementById('callEmbed');
+  const area = document.getElementById('callArea');
+  const btn2 = document.getElementById('callBtn2');
+  const status = document.getElementById('callStatus');
+
+  frame.src = '';
+  embed.classList.add('hidden');
+  if (btn2) btn2.classList.remove('hidden');
+  area.querySelector('p').classList.remove('hidden');
+  if (status) { status.textContent = 'Call ended.'; }
+}
 </script>
 </body>
 </html>"""
