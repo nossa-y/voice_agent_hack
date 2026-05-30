@@ -69,7 +69,7 @@ async def get_versions():
 async def get_diff():
     versions = _load_all_versions()
     if len(versions) < 2:
-        return {"diff": "No previous version to compare.", "from_v": 0, "to_v": 0}
+        return {"diff": "", "from_v": 0, "to_v": 0}
     prev = versions[-2]["system_instruction"]
     curr = versions[-1]["system_instruction"]
     diff_lines = list(difflib.unified_diff(
@@ -94,6 +94,56 @@ async def get_prompt(version: int):
     return data
 
 
+@app.get("/api/scenarios")
+async def get_scenarios():
+    """Return the latest Cekura test results if available."""
+    try:
+        from cekura._client import Cekura
+        cekura = Cekura(api_key=CEKURA_API_KEY)
+        results = cekura.results.list(agent_id=18058, limit=1)
+        if isinstance(results, dict):
+            results = results.get("results", [])
+        if not results:
+            return {"scenarios": [], "result_id": None}
+
+        latest = results[0] if isinstance(results[0], dict) else cekura.results.get(results[0])
+        result_id = latest.get("id")
+        full = cekura.results.get(result_id)
+
+        scenarios = []
+        runs = full.get("runs", {})
+        if isinstance(runs, dict):
+            for rid, rdata in runs.items():
+                name = rdata.get("scenario", {}).get("name", "?")
+                success = rdata.get("success", False)
+                status = rdata.get("status", "unknown")
+                transcript = rdata.get("transcript_object", [])
+                turns = len(transcript) if isinstance(transcript, list) else 0
+
+                # Get first few transcript turns for preview
+                preview = []
+                if isinstance(transcript, list):
+                    for t in transcript[:6]:
+                        if isinstance(t, dict):
+                            preview.append({
+                                "role": t.get("role", "?"),
+                                "text": str(t.get("content", t.get("text", "")))[:150],
+                            })
+
+                scenarios.append({
+                    "name": name,
+                    "success": success,
+                    "status": status,
+                    "turns": turns,
+                    "preview": preview,
+                })
+
+        return {"scenarios": scenarios, "result_id": result_id, "success_rate": full.get("success_rate", 0)}
+
+    except Exception as e:
+        return {"scenarios": [], "error": str(e)}
+
+
 @app.post("/api/improve")
 async def run_improvement():
     """Run the full improvement loop: Cekura test -> Nemotron reflection -> save."""
@@ -116,12 +166,17 @@ async def run_improvement():
         # 3. Extract feedback
         feedback_lines = []
         runs = final.get("runs", {})
+        scenario_results = []
         if isinstance(runs, dict):
             for rid, rdata in runs.items():
                 name = rdata.get("scenario", {}).get("name", "?")
                 success = rdata.get("success", False)
+                expected = rdata.get("scenario", {}).get("expected_outcome_prompt", "")
                 transcript = rdata.get("transcript_object", [])
+                turns = len(transcript) if isinstance(transcript, list) else 0
+                scenario_results.append({"name": name, "success": success, "turns": turns})
                 feedback_lines.append(f"SCENARIO: {name} | PASSED: {success}")
+                feedback_lines.append(f"EXPECTED: {expected[:200]}")
                 if isinstance(transcript, list):
                     for t in transcript:
                         if isinstance(t, dict):
@@ -183,6 +238,7 @@ async def run_improvement():
             "version": new_version,
             "success_rate": success_rate,
             "changes": changes,
+            "scenarios": scenario_results,
             "status": "success",
         }
 
@@ -221,231 +277,456 @@ DASHBOARD_HTML = """<!DOCTYPE html>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>SyncFlow - Self-Improving Sales Agent</title>
 <script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script>
+tailwind.config = {
+  theme: {
+    extend: {
+      fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'], mono: ['JetBrains Mono', 'monospace'] },
+      colors: {
+        surface: { 50: '#faf9f7', 100: '#f5f3f0', 200: '#ebe8e3', 300: '#d6d1ca' },
+        ink: { DEFAULT: '#1a1a1a', light: '#4a4a4a', muted: '#7a7a7a' },
+        accent: { DEFAULT: '#2563eb', dim: '#dbeafe' },
+        success: { DEFAULT: '#16a34a', dim: '#dcfce7' },
+        danger: { DEFAULT: '#dc2626', dim: '#fee2e2' },
+      }
+    }
+  }
+}
+</script>
 <style>
-  body { background: #0a0a0a; color: #e5e5e5; font-family: 'Inter', system-ui, sans-serif; }
-  .card { background: #141414; border: 1px solid #262626; border-radius: 12px; }
-  .bar { background: #22c55e; border-radius: 4px; height: 28px; transition: width 0.8s ease; }
-  .bar-bg { background: #1a1a1a; border-radius: 4px; height: 28px; }
-  .diff-add { color: #22c55e; background: rgba(34,197,94,0.1); }
-  .diff-del { color: #ef4444; background: rgba(239,68,68,0.1); }
-  .diff-header { color: #60a5fa; }
-  .pulse { animation: pulse 2s infinite; }
-  @keyframes pulse { 0%,100% { opacity:1 } 50% { opacity:0.5 } }
-  .glow { box-shadow: 0 0 20px rgba(34,197,94,0.3); }
+  * { box-sizing: border-box; }
+  body { background: #faf9f7; color: #1a1a1a; font-family: 'Inter', system-ui, sans-serif; }
+  .glass {
+    background: rgba(255, 255, 255, 0.75);
+    backdrop-filter: blur(16px);
+    border: 1px solid rgba(0, 0, 0, 0.06);
+    border-radius: 16px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.03);
+  }
+  .glass-sm { border-radius: 12px; }
+  .score-bar { height: 32px; border-radius: 8px; transition: width 1s cubic-bezier(0.4, 0, 0.2, 1); }
+  .score-bar-bg { background: #f0ede8; height: 32px; border-radius: 8px; }
+  .diff-add { color: #16a34a; background: rgba(22,163,74,0.08); padding: 1px 4px; }
+  .diff-del { color: #dc2626; background: rgba(220,38,38,0.06); padding: 1px 4px; text-decoration: line-through; text-decoration-color: rgba(220,38,38,0.3); }
+  .diff-hunk { color: #2563eb; opacity: 0.7; }
+  .diff-file { color: #7c3aed; font-weight: 600; }
+  .pulse-dot { width: 8px; height: 8px; border-radius: 50%; background: #16a34a; animation: pulse-dot 2s infinite; }
+  @keyframes pulse-dot { 0%,100% { box-shadow: 0 0 0 0 rgba(22,163,74,0.4) } 50% { box-shadow: 0 0 0 6px rgba(22,163,74,0) } }
+  .fade-in { animation: fadeIn 0.5s ease; }
+  @keyframes fadeIn { from { opacity:0; transform:translateY(8px) } to { opacity:1; transform:translateY(0) } }
+  .btn-primary {
+    background: #1a1a1a;
+    color: white;
+    transition: all 0.2s;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.12);
+  }
+  .btn-primary:hover { background: #333; box-shadow: 0 2px 8px rgba(0,0,0,0.2); transform: translateY(-1px); }
+  .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; transform: none; box-shadow: none; }
+  .btn-success {
+    background: #16a34a;
+    color: white;
+    transition: all 0.2s;
+    box-shadow: 0 1px 4px rgba(22,163,74,0.25);
+  }
+  .btn-success:hover { background: #15803d; box-shadow: 0 2px 8px rgba(22,163,74,0.4); transform: translateY(-1px); }
+  .btn-success:disabled { opacity: 0.4; cursor: not-allowed; transform: none; box-shadow: none; }
+  .tag { display: inline-flex; align-items: center; padding: 2px 10px; border-radius: 999px; font-size: 12px; font-weight: 500; }
+  .tag-pass { background: #dcfce7; color: #16a34a; border: 1px solid #bbf7d0; }
+  .tag-fail { background: #fee2e2; color: #dc2626; border: 1px solid #fecaca; }
+  .tag-version { background: #dbeafe; color: #2563eb; border: 1px solid #bfdbfe; }
+  .spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid rgba(255,255,255,0.4); border-top-color: white; border-radius: 50%; animation: spin 0.6s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg) } }
+  .transcript-preview { max-height: 0; overflow: hidden; transition: max-height 0.3s ease; }
+  .transcript-preview.open { max-height: 400px; }
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #d6d1ca; border-radius: 3px; }
 </style>
 </head>
-<body class="min-h-screen p-6">
+<body class="min-h-screen">
 
-<div class="max-w-6xl mx-auto">
-  <!-- Header -->
-  <div class="flex items-center justify-between mb-8">
-    <div>
-      <h1 class="text-3xl font-bold text-white">SyncFlow Sales Agent</h1>
-      <p class="text-gray-400 mt-1">Self-improving AI SDR - Nemotron + Cekura + Pipecat</p>
+<!-- Fixed Header -->
+<header class="fixed top-0 left-0 right-0 z-50" style="background:rgba(250,249,247,0.85);backdrop-filter:blur(16px);border-bottom:1px solid rgba(0,0,0,0.06)">
+  <div class="max-w-7xl mx-auto px-6 py-3 flex items-center justify-between">
+    <div class="flex items-center gap-3">
+      <div class="flex items-center gap-2">
+        <svg width="28" height="28" viewBox="0 0 28 28" fill="none"><circle cx="14" cy="14" r="12" stroke="#1a1a1a" stroke-width="2"/><path d="M9 14l3 3 7-7" stroke="#1a1a1a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span class="text-lg font-bold text-ink tracking-tight">SyncFlow</span>
+      </div>
+      <span class="text-ink-muted text-sm hidden sm:inline">Self-Improving Sales Agent</span>
     </div>
-    <div class="flex gap-3">
-      <a href="http://localhost:7860" target="_blank"
-         class="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-white font-medium transition">
+    <div class="flex items-center gap-3">
+      <div class="flex items-center gap-2 mr-2">
+        <div class="pulse-dot"></div>
+        <span class="text-xs text-ink-muted" id="headerVersion">Agent Live</span>
+      </div>
+      <a href="http://localhost:7860" target="_blank" class="btn-primary px-4 py-2 rounded-xl text-sm font-medium">
         Try the Agent
       </a>
-      <button onclick="runImprove()"
-              id="improveBtn"
-              class="px-4 py-2 bg-green-600 hover:bg-green-500 rounded-lg text-white font-medium transition">
-        Run Improvement Loop
+    </div>
+  </div>
+</header>
+
+<main class="max-w-7xl mx-auto px-6 pt-20 pb-16">
+
+  <!-- Hero -->
+  <section class="mt-8 mb-12 fade-in">
+    <h1 class="text-4xl sm:text-5xl font-extrabold text-ink leading-tight tracking-tight">
+      An AI sales agent that rewrites<br>its own playbook.
+    </h1>
+    <p class="mt-4 text-lg text-ink-light max-w-2xl leading-relaxed">
+      SyncFlow runs sales calls, evaluates performance with Cekura, reflects with Nemotron, and generates an improved prompt. Automatically. Watch it evolve.
+    </p>
+  </section>
+
+  <!-- Metric Cards -->
+  <section class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8 fade-in">
+    <div class="glass p-6">
+      <p class="text-xs text-ink-muted uppercase tracking-widest mb-1">Current Version</p>
+      <p class="text-3xl font-bold text-ink" id="metricVersion">--</p>
+      <p class="text-sm text-ink-light mt-1" id="metricVersionSub">Loading...</p>
+    </div>
+    <div class="glass p-6">
+      <p class="text-xs text-ink-muted uppercase tracking-widest mb-1">Cekura Score</p>
+      <p class="text-3xl font-bold text-ink" id="metricScore">--</p>
+      <p class="text-sm text-ink-light mt-1" id="metricScoreSub">Loading...</p>
+    </div>
+    <div class="glass p-6">
+      <p class="text-xs text-ink-muted uppercase tracking-widest mb-1">Improvement Cycles</p>
+      <p class="text-3xl font-bold text-ink" id="metricCycles">--</p>
+      <p class="text-sm text-ink-light mt-1" id="metricCyclesSub">Loading...</p>
+    </div>
+  </section>
+
+  <!-- Run Improvement CTA -->
+  <section class="mb-10">
+    <div class="glass p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+      <div>
+        <p class="text-ink font-semibold">Run Improvement Cycle</p>
+        <p class="text-sm text-ink-light">Runs 5 Cekura test scenarios, analyzes failures with Nemotron, generates improved prompt. Takes 3-5 min.</p>
+      </div>
+      <button onclick="runImprove()" id="improveBtn" class="btn-success px-6 py-3 rounded-xl text-ink font-semibold text-sm whitespace-nowrap flex items-center gap-2">
+        <span id="improveBtnText">Run Improvement</span>
+        <span id="improveBtnSpinner" class="spinner hidden"></span>
       </button>
     </div>
-  </div>
+    <div id="statusBar" class="mt-3 text-center text-sm text-ink-light hidden">
+      <span id="statusText"></span>
+    </div>
+  </section>
 
-  <!-- Top Row: Score Timeline + Current Version -->
-  <div class="grid grid-cols-2 gap-6 mb-6">
-    <!-- Score Timeline -->
-    <div class="card p-6">
-      <h2 class="text-lg font-semibold text-white mb-4">Improvement Timeline</h2>
+  <!-- Two Column: Timeline + Changes -->
+  <section class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+
+    <!-- Evolution History -->
+    <div class="glass p-6">
+      <h2 class="text-base font-semibold text-ink mb-5 flex items-center gap-2">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 14V2m0 12h12M5 11l3-4 3 2 3-5" stroke="#3b82f6" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        Evolution History
+      </h2>
       <div id="timeline" class="space-y-3">
-        <p class="text-gray-500">Loading...</p>
+        <p class="text-ink-muted text-sm">Loading...</p>
       </div>
     </div>
 
-    <!-- Current Version -->
-    <div class="card p-6">
-      <h2 class="text-lg font-semibold text-white mb-4">Current Version</h2>
+    <!-- Current Version Changes -->
+    <div class="glass p-6">
+      <h2 class="text-base font-semibold text-ink mb-5 flex items-center gap-2">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 1v14M1 8h14" stroke="#22c55e" stroke-width="1.5" stroke-linecap="round"/></svg>
+        Latest Changes
+      </h2>
       <div id="currentVersion">
-        <p class="text-gray-500">Loading...</p>
+        <p class="text-ink-muted text-sm">Loading...</p>
       </div>
     </div>
-  </div>
+  </section>
 
-  <!-- Bottom Row: Diff + Architecture -->
-  <div class="grid grid-cols-2 gap-6">
-    <!-- Prompt Diff -->
-    <div class="card p-6">
-      <h2 class="text-lg font-semibold text-white mb-4">Prompt Evolution</h2>
-      <div id="diffView" class="font-mono text-sm overflow-auto max-h-96">
-        <p class="text-gray-500">Loading...</p>
+  <!-- Prompt Diff -->
+  <section class="glass p-6 mb-8">
+    <h2 class="text-base font-semibold text-ink mb-4 flex items-center gap-2">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="1" y="1" width="14" height="14" rx="3" stroke="#a78bfa" stroke-width="1.5"/><path d="M5 5h6M5 8h4M5 11h5" stroke="#a78bfa" stroke-width="1.5" stroke-linecap="round"/></svg>
+      Prompt Diff
+    </h2>
+    <div id="diffView" class="font-mono text-xs leading-relaxed overflow-auto max-h-80 p-4 rounded-xl bg-surface-200">
+      <p class="text-ink-muted">Loading...</p>
+    </div>
+  </section>
+
+  <!-- Scenario Results -->
+  <section class="glass p-6 mb-8">
+    <h2 class="text-base font-semibold text-ink mb-5 flex items-center gap-2">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 3h12M2 8h12M2 13h12" stroke="#f59e0b" stroke-width="1.5" stroke-linecap="round"/></svg>
+      Cekura Test Results
+    </h2>
+    <div id="scenarios">
+      <p class="text-ink-muted text-sm">Loading scenarios...</p>
+    </div>
+  </section>
+
+  <!-- Two Column: Try Agent + Architecture -->
+  <section class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+
+    <!-- Try the Agent -->
+    <div class="glass p-6">
+      <h2 class="text-base font-semibold text-ink mb-4">Talk to the Agent</h2>
+      <p class="text-sm text-ink-light mb-5">Connect via WebRTC and have a live sales conversation. The agent pitches SyncFlow as a random prospect persona.</p>
+      <a href="http://localhost:7860" target="_blank" class="btn-primary inline-flex items-center gap-2 px-6 py-3 rounded-xl text-ink font-semibold text-sm">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 1a7 7 0 100 14A7 7 0 008 1z" stroke="currentColor" stroke-width="1.5"/><path d="M6.5 5l4 3-4 3V5z" fill="currentColor"/></svg>
+        Open Voice Agent
+      </a>
+      <div class="mt-6 grid grid-cols-2 gap-3">
+        <div class="p-3 rounded-xl bg-surface-100 border border-surface-300/50">
+          <p class="text-xs font-semibold text-ink">Sarah Chen</p>
+          <p class="text-xs text-ink-muted">VP RevOps, Meridian Analytics</p>
+        </div>
+        <div class="p-3 rounded-xl bg-surface-100 border border-surface-300/50">
+          <p class="text-xs font-semibold text-ink">Marcus Johnson</p>
+          <p class="text-xs text-ink-muted">Head of Data, GreenPath Logistics</p>
+        </div>
+        <div class="p-3 rounded-xl bg-surface-100 border border-surface-300/50">
+          <p class="text-xs font-semibold text-ink">Priya Patel</p>
+          <p class="text-xs text-ink-muted">Dir Finance Ops, NovaBridge</p>
+        </div>
+        <div class="p-3 rounded-xl bg-surface-100 border border-surface-300/50">
+          <p class="text-xs font-semibold text-ink">David Kim</p>
+          <p class="text-xs text-ink-muted">Ops Manager, Atlas Health Tech</p>
+        </div>
       </div>
+      <p class="text-xs text-ink-muted mt-3">Agent randomly selects a persona each call</p>
     </div>
 
-    <!-- How it Works -->
-    <div class="card p-6">
-      <h2 class="text-lg font-semibold text-white mb-4">How It Works</h2>
-      <div class="space-y-4 text-sm text-gray-300">
-        <div class="flex items-start gap-3">
-          <span class="text-green-400 font-bold text-lg">1</span>
+    <!-- How the Loop Works -->
+    <div class="glass p-6">
+      <h2 class="text-base font-semibold text-ink mb-5">How the Loop Works</h2>
+      <div class="space-y-5">
+        <div class="flex items-start gap-4">
+          <div class="w-8 h-8 rounded-lg bg-blue-50 border border-blue-200 flex items-center justify-center shrink-0">
+            <span class="text-blue-600 text-sm font-bold">1</span>
+          </div>
           <div>
-            <p class="text-white font-medium">Cekura runs 5 test scenarios</p>
-            <p class="text-gray-400">Simulated prospects call the bot with different personas, objections, and edge cases</p>
+            <p class="text-sm font-medium text-ink">Agent makes calls</p>
+            <p class="text-xs text-ink-muted">Nemotron 3 Super 120B powers conversation via Pipecat</p>
           </div>
         </div>
-        <div class="flex items-start gap-3">
-          <span class="text-green-400 font-bold text-lg">2</span>
+        <div class="w-px h-4 bg-surface-300 ml-4"></div>
+        <div class="flex items-start gap-4">
+          <div class="w-8 h-8 rounded-lg bg-amber-50 border border-amber-200 flex items-center justify-center shrink-0">
+            <span class="text-amber-600 text-sm font-bold">2</span>
+          </div>
           <div>
-            <p class="text-white font-medium">Transcripts + scores captured</p>
-            <p class="text-gray-400">Each call is graded: did the bot qualify? handle objections? book a demo?</p>
+            <p class="text-sm font-medium text-ink">Cekura evaluates</p>
+            <p class="text-xs text-ink-muted">5 automated test scenarios with pass/fail scoring</p>
           </div>
         </div>
-        <div class="flex items-start gap-3">
-          <span class="text-green-400 font-bold text-lg">3</span>
+        <div class="w-px h-4 bg-surface-300 ml-4"></div>
+        <div class="flex items-start gap-4">
+          <div class="w-8 h-8 rounded-lg bg-purple-50 border border-purple-200 flex items-center justify-center shrink-0">
+            <span class="text-purple-600 text-sm font-bold">3</span>
+          </div>
           <div>
-            <p class="text-white font-medium">Nemotron self-reflects</p>
-            <p class="text-gray-400">The same LLM analyzes its own failures and generates an improved system prompt</p>
+            <p class="text-sm font-medium text-ink">Nemotron reflects</p>
+            <p class="text-xs text-ink-muted">Analyzes its own failures, identifies what to fix</p>
           </div>
         </div>
-        <div class="flex items-start gap-3">
-          <span class="text-green-400 font-bold text-lg">4</span>
+        <div class="w-px h-4 bg-surface-300 ml-4"></div>
+        <div class="flex items-start gap-4">
+          <div class="w-8 h-8 rounded-lg bg-green-50 border border-green-200 flex items-center justify-center shrink-0">
+            <span class="text-green-600 text-sm font-bold">4</span>
+          </div>
           <div>
-            <p class="text-white font-medium">Prompt evolves, bot improves</p>
-            <p class="text-gray-400">New prompt is saved. Next call uses it. Repeat until scores plateau.</p>
+            <p class="text-sm font-medium text-ink">Prompt evolves</p>
+            <p class="text-xs text-ink-muted">New system prompt saved. Next calls use it. Repeat.</p>
           </div>
         </div>
       </div>
 
-      <div class="mt-6 p-4 bg-gray-900 rounded-lg">
-        <p class="text-xs text-gray-400 uppercase tracking-wider mb-2">Tech Stack</p>
+      <div class="mt-6 p-4 rounded-xl bg-surface-200">
+        <p class="text-[10px] text-ink-muted uppercase tracking-widest mb-3">Tech Stack</p>
         <div class="flex flex-wrap gap-2">
-          <span class="px-2 py-1 bg-green-900/50 text-green-400 rounded text-xs">NVIDIA Nemotron 3 Super 120B</span>
-          <span class="px-2 py-1 bg-blue-900/50 text-blue-400 rounded text-xs">Pipecat Cloud</span>
-          <span class="px-2 py-1 bg-purple-900/50 text-purple-400 rounded text-xs">Cekura Eval</span>
-          <span class="px-2 py-1 bg-yellow-900/50 text-yellow-400 rounded text-xs">Gradium TTS</span>
+          <span class="tag" style="background:#dcfce7;color:#16a34a;border:1px solid #bbf7d0">NVIDIA Nemotron 120B</span>
+          <span class="tag" style="background:#dbeafe;color:#2563eb;border:1px solid #bfdbfe">Pipecat Cloud</span>
+          <span class="tag" style="background:#f3e8ff;color:#7c3aed;border:1px solid #e9d5ff">Cekura Eval</span>
+          <span class="tag" style="background:#fef3c7;color:#d97706;border:1px solid #fde68a">Gradium TTS</span>
         </div>
       </div>
     </div>
-  </div>
+  </section>
 
-  <!-- Status Bar -->
-  <div id="statusBar" class="mt-6 card p-4 text-center text-gray-400 text-sm hidden">
-    <span id="statusText"></span>
+</main>
+
+<!-- Footer -->
+<footer class="border-t border-surface-300/50 py-6">
+  <div class="max-w-7xl mx-auto px-6 flex flex-col sm:flex-row items-center justify-between text-xs text-ink-muted gap-2">
+    <span>Built at YC Voice Agents Hackathon - Pipecat + Cekura + NVIDIA Nemotron</span>
+    <span>By Nossa Iyamu</span>
   </div>
-</div>
+</footer>
 
 <script>
+const ESC = s => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
 async function loadData() {
   try {
-    const [versions, diff] = await Promise.all([
+    const [versions, diff, scenarios] = await Promise.all([
       fetch('/api/versions').then(r => r.json()),
       fetch('/api/diff').then(r => r.json()),
+      fetch('/api/scenarios').then(r => r.json()).catch(() => ({scenarios:[]})),
     ]);
+    renderMetrics(versions);
     renderTimeline(versions);
     renderCurrentVersion(versions);
     renderDiff(diff);
-  } catch (e) {
-    console.error('Failed to load data:', e);
-  }
+    renderScenarios(scenarios);
+  } catch (e) { console.error('Load failed:', e); }
+}
+
+function renderMetrics(versions) {
+  if (!versions.length) return;
+  const curr = versions[versions.length - 1];
+  const rate = (curr.scores||{}).success_rate ?? (curr.scores||{}).baseline_success_rate ?? null;
+
+  document.getElementById('metricVersion').textContent = 'v' + curr.version;
+  document.getElementById('metricVersionSub').textContent = 'Prompt evolved ' + curr.version + ' time' + (curr.version !== 1 ? 's' : '');
+  document.getElementById('headerVersion').textContent = 'v' + curr.version + ' Live';
+
+  document.getElementById('metricScore').textContent = rate !== null ? rate + '%' : '--';
+  document.getElementById('metricScoreSub').textContent = rate !== null ? (rate >= 60 ? 'Performing well' : 'Room to improve') : 'No score yet';
+
+  document.getElementById('metricCycles').textContent = versions.length - 1;
+  document.getElementById('metricCyclesSub').textContent = versions.length <= 1 ? 'Run your first cycle' : 'Across ' + versions.length + ' versions';
 }
 
 function renderTimeline(versions) {
   const el = document.getElementById('timeline');
-  if (!versions.length) {
-    el.innerHTML = '<p class="text-gray-500">No versions yet. Run the improvement loop.</p>';
-    return;
-  }
+  if (!versions.length) { el.innerHTML = '<p class="text-ink-muted text-sm">No versions yet.</p>'; return; }
   el.innerHTML = versions.map(v => {
-    const rate = (v.scores && v.scores.success_rate) ?? (v.scores && v.scores.baseline_success_rate) ?? null;
-    const pct = rate !== null ? rate : 0;
-    const label = rate !== null ? pct + '%' : 'baseline';
-    const barColor = pct >= 60 ? 'bg-green-500' : pct >= 40 ? 'bg-yellow-500' : 'bg-red-500';
-    return '<div class="flex items-center gap-3">' +
-      '<span class="text-gray-400 w-8 text-right font-mono">v' + v.version + '</span>' +
-      '<div class="bar-bg flex-1 relative">' +
-        '<div class="' + barColor + ' rounded h-7 flex items-center px-2 text-xs font-bold text-white" style="width:' + Math.max(pct, 8) + '%">' + label + '</div>' +
-      '</div>' +
-    '</div>';
+    const rate = (v.scores||{}).success_rate ?? (v.scores||{}).baseline_success_rate ?? 0;
+    const pct = rate || 0;
+    const color = pct >= 60 ? 'bg-green-500' : pct >= 40 ? 'bg-amber-500' : 'bg-red-400';
+    const label = rate !== null && rate !== undefined ? pct + '%' : 'base';
+    return `<div class="flex items-center gap-3">
+      <span class="tag-version tag w-12 justify-center font-mono">v${v.version}</span>
+      <div class="score-bar-bg flex-1 relative">
+        <div class="${color} score-bar flex items-center px-3" style="width:${Math.max(pct, 6)}%">
+          <span class="text-xs font-bold text-ink whitespace-nowrap">${label}</span>
+        </div>
+      </div>
+      <span class="text-xs text-ink-muted w-16 text-right">${(v.timestamp||'').substring(11,16)||''}</span>
+    </div>`;
   }).join('');
 }
 
 function renderCurrentVersion(versions) {
   const el = document.getElementById('currentVersion');
-  if (!versions.length) { el.innerHTML = '<p class="text-gray-500">No versions.</p>'; return; }
+  if (!versions.length) { el.innerHTML = '<p class="text-ink-muted text-sm">No versions.</p>'; return; }
   const v = versions[versions.length - 1];
-  const changes = (v.changes || '').replace(/^CHANGES:\n?/i, '');
-  const bullets = changes.split('\n').filter(l => l.trim().startsWith('-')).map(l =>
-    '<li class="text-gray-300">' + l.trim().substring(1).trim() + '</li>'
+  const changes = (v.changes || '').replace(/^CHANGES:?\\n?/i, '');
+  const bullets = changes.split('\\n').filter(l => l.trim().startsWith('-')).map(l =>
+    `<li class="text-sm text-ink leading-relaxed">${ESC(l.trim().substring(1).trim())}</li>`
   ).join('');
 
-  el.innerHTML =
-    '<div class="flex items-center gap-2 mb-3">' +
-      '<span class="text-2xl font-bold text-white">v' + v.version + '</span>' +
-      '<span class="text-gray-500 text-sm">' + (v.timestamp || '').substring(0, 19) + '</span>' +
-    '</div>' +
-    '<p class="text-sm text-gray-400 mb-3">Prompt length: ' + v.prompt_length + ' chars</p>' +
-    (bullets ? '<p class="text-sm text-gray-400 mb-2 font-medium">Changes:</p><ul class="list-disc pl-5 space-y-1 text-sm">' + bullets + '</ul>' : '') +
-    (v.scores ? '<div class="mt-4 p-3 bg-gray-900 rounded-lg"><p class="text-xs text-gray-400">Score: <span class="text-white font-bold">' + JSON.stringify(v.scores) + '</span></p></div>' : '');
+  el.innerHTML = `
+    <div class="flex items-baseline gap-3 mb-4">
+      <span class="text-2xl font-bold text-ink">v${v.version}</span>
+      <span class="text-xs text-ink-muted">${(v.timestamp||'').substring(0,16).replace('T',' ')}</span>
+      <span class="text-xs text-ink-muted">${v.prompt_length} chars</span>
+    </div>
+    ${bullets ? `<ul class="space-y-2 list-none">${bullets.replace(/<li/g, '<li class="flex items-start gap-2 text-sm text-ink"><span class="text-green-600 mt-1 shrink-0">+</span><span')}</ul>` : '<p class="text-ink-muted text-sm">Initial version</p>'}
+  `;
 }
 
 function renderDiff(data) {
   const el = document.getElementById('diffView');
-  if (!data.diff || data.diff === 'No previous version to compare.') {
-    el.innerHTML = '<p class="text-gray-500">No diff available yet. Run the improvement loop to see changes.</p>';
+  if (!data.diff) {
+    el.innerHTML = '<p class="text-ink-muted text-sm">No diff available yet. Run an improvement cycle to see prompt changes.</p>';
     return;
   }
-  const lines = data.diff.split('\\n').map(line => {
-    if (line.startsWith('+++') || line.startsWith('---') || line.startsWith('@@')) {
-      return '<div class="diff-header">' + escHtml(line) + '</div>';
-    } else if (line.startsWith('+')) {
-      return '<div class="diff-add">' + escHtml(line) + '</div>';
-    } else if (line.startsWith('-')) {
-      return '<div class="diff-del">' + escHtml(line) + '</div>';
-    }
-    return '<div>' + escHtml(line) + '</div>';
+  el.innerHTML = data.diff.split('\\n').map(line => {
+    if (line.startsWith('+++') || line.startsWith('---')) return `<div class="diff-file">${ESC(line)}</div>`;
+    if (line.startsWith('@@')) return `<div class="diff-hunk">${ESC(line)}</div>`;
+    if (line.startsWith('+')) return `<div class="diff-add">+ ${ESC(line.substring(1))}</div>`;
+    if (line.startsWith('-')) return `<div class="diff-del">- ${ESC(line.substring(1))}</div>`;
+    return `<div class="text-ink-muted">${ESC(line)}</div>`;
   }).join('');
-  el.innerHTML = lines;
 }
 
-function escHtml(s) {
-  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+function renderScenarios(data) {
+  const el = document.getElementById('scenarios');
+  const scenarios = data.scenarios || [];
+  if (!scenarios.length) {
+    el.innerHTML = '<p class="text-ink-muted text-sm">No test results yet. Run an improvement cycle to see scenario outcomes.</p>';
+    return;
+  }
+
+  el.innerHTML = `
+    <div class="space-y-3">
+      ${scenarios.map((s, i) => `
+        <div class="p-4 rounded-xl bg-surface-100 border border-surface-300/30">
+          <div class="flex items-center justify-between cursor-pointer" onclick="toggleTranscript(${i})">
+            <div class="flex items-center gap-3">
+              <span class="${s.success ? 'tag-pass' : 'tag-fail'} tag">${s.success ? 'PASS' : 'FAIL'}</span>
+              <span class="text-sm text-ink font-medium">${ESC(s.name)}</span>
+            </div>
+            <div class="flex items-center gap-3">
+              <span class="text-xs text-ink-muted">${s.turns} turns</span>
+              <svg class="w-4 h-4 text-ink-muted transition-transform" id="chevron-${i}" viewBox="0 0 16 16"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round"/></svg>
+            </div>
+          </div>
+          <div class="transcript-preview mt-3 pl-4 border-l border-surface-300" id="transcript-${i}">
+            ${(s.preview||[]).map(t => `
+              <div class="py-1">
+                <span class="text-xs font-medium ${t.role === 'Main Agent' ? 'text-blue-600' : 'text-ink-muted'}">${ESC(t.role)}:</span>
+                <span class="text-xs text-ink-light ml-1">${ESC(t.text)}</span>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
+function toggleTranscript(i) {
+  const el = document.getElementById('transcript-' + i);
+  const chevron = document.getElementById('chevron-' + i);
+  el.classList.toggle('open');
+  chevron.style.transform = el.classList.contains('open') ? 'rotate(180deg)' : '';
 }
 
 async function runImprove() {
   const btn = document.getElementById('improveBtn');
+  const btnText = document.getElementById('improveBtnText');
+  const btnSpinner = document.getElementById('improveBtnSpinner');
   const bar = document.getElementById('statusBar');
   const txt = document.getElementById('statusText');
 
   btn.disabled = true;
-  btn.className = btn.className.replace('bg-green-600 hover:bg-green-500', 'bg-gray-600');
-  btn.textContent = 'Running...';
+  btnText.textContent = 'Running...';
+  btnSpinner.classList.remove('hidden');
   bar.classList.remove('hidden');
-  txt.innerHTML = '<span class="pulse">Running 5 Cekura test scenarios + Nemotron self-reflection... (2-5 min)</span>';
+  txt.innerHTML = 'Running 5 Cekura test scenarios + Nemotron self-reflection... <span class="text-ink-muted">(2-5 min)</span>';
 
   try {
     const res = await fetch('/api/improve', { method: 'POST' });
     const data = await res.json();
     if (data.error) {
-      txt.innerHTML = '<span class="text-red-400">Error: ' + data.error + '</span>';
+      txt.innerHTML = '<span class="text-red-400">Error: ' + ESC(data.error) + '</span>';
     } else {
-      txt.innerHTML = '<span class="text-green-400">v' + data.version + ' created! Success rate: ' + data.success_rate + '%</span>';
+      txt.innerHTML = '<span class="text-green-600">v' + data.version + ' created. Score: ' + data.success_rate + '%</span>';
       await loadData();
     }
   } catch (e) {
-    txt.innerHTML = '<span class="text-red-400">Failed: ' + e.message + '</span>';
+    txt.innerHTML = '<span class="text-red-400">Failed: ' + ESC(e.message) + '</span>';
   }
 
   btn.disabled = false;
-  btn.className = btn.className.replace('bg-gray-600', 'bg-green-600 hover:bg-green-500');
-  btn.textContent = 'Run Improvement Loop';
+  btnText.textContent = 'Run Improvement';
+  btnSpinner.classList.add('hidden');
 }
 
-// Load on page ready
 loadData();
-// Auto-refresh every 30s
 setInterval(loadData, 30000);
 </script>
 </body>
