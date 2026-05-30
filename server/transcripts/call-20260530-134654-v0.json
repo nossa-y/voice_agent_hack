@@ -1,0 +1,41 @@
+{
+  "timestamp": "2026-05-30T20:46:54.474748+00:00",
+  "prompt_version": 0,
+  "prospect": {
+    "name": "Priya Patel",
+    "company": "NovaBridge Financial",
+    "title": "Director of Finance Operations"
+  },
+  "demo_scheduled": false,
+  "objections_raised": [],
+  "messages": [
+    {
+      "role": "user",
+      "content": "You just connected on an outbound sales call. The prospect picked up the phone. Call get_prospect_info first to learn about them, then greet them with a brief, natural opener. Remember: you called them, so don't ask how you can help."
+    },
+    {
+      "role": "assistant",
+      "content": ""
+    },
+    {
+      "role": "tool",
+      "content": "{\"name\": \"Priya Patel\", \"title\": \"Director of Finance Operations\", \"company\": \"NovaBridge Financial\", \"company_size\": \"200 employees\", \"industry\": \"Financial Services\", \"pain_points\": [\"Month-end close takes 8 days because data from NetSuite, Stripe, and their billing system has to be manually reconciled\", \"Compliance team needs audit trails for all data movement, which they currently track in spreadsheets\", \"No visibility into when data was last synced or if numbers in reports are current\"], \"current_tools\": \"NetSuite, Stripe, QuickBooks, Google Sheets, Fivetran (considering switching)\", \"trigger_event\": \"Failed an internal audit because they couldn't prove data lineage for a financial report\"}"
+    },
+    {
+      "role": "assistant",
+      "content": "\u2713"
+    },
+    {
+      "role": "user",
+      "content": "Hey."
+    },
+    {
+      "role": "assistant",
+      "content": "Hi Priya, this is Alex from SyncFlow. I saw NovaBridge Financial had an internal audit issue around data lineage, so"
+    },
+    {
+      "role": "user",
+      "content": "I'm not interested whether"
+    }
+  ]
+}

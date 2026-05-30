@@ -18,9 +18,11 @@ Run the bot using::
     uv run bot-sales.py
 """
 
+import json
 import os
 import random
-from datetime import date
+import time as _time
+from datetime import date, datetime, timezone
 
 import aiohttp
 from dotenv import load_dotenv
@@ -37,6 +39,7 @@ from pipecat.processors.aggregators.llm_response_universal import (
 )
 from pipecat.processors.frame_processor import FrameDirection
 from pipecat.runner.types import (
+    DailyRunnerArguments,
     RunnerArguments,
     SmallWebRTCRunnerArguments,
     WebSocketRunnerArguments,
@@ -57,6 +60,143 @@ from nemotron_llm import VLLMOpenAILLMService
 from nvidia_stt import NVidiaWebSocketSTTService
 
 load_dotenv(override=True)
+
+# --- Prompt versioning & transcript capture ----------------------------------
+
+PROMPT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "prompt_versions")
+TRANSCRIPT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "transcripts")
+
+
+def load_current_prompt() -> tuple[str | None, int]:
+    """Load the current system prompt from disk.
+
+    Returns:
+        (system_instruction, version) or (None, 0) if no version file exists.
+    """
+    current_file = os.path.join(PROMPT_DIR, "current.json")
+    if os.path.exists(current_file):
+        try:
+            with open(current_file) as f:
+                data = json.load(f)
+            return data["system_instruction"], data["version"]
+        except (json.JSONDecodeError, KeyError) as e:
+            logger.error(f"Failed to load prompt version: {e}")
+    return None, 0
+
+
+def save_transcript(
+    messages: list,
+    prospect: dict,
+    call_state: dict,
+    prompt_version: int,
+) -> str | None:
+    """Save the call transcript to a timestamped JSON file.
+
+    Returns:
+        The filepath of the saved transcript, or None on failure.
+    """
+    os.makedirs(TRANSCRIPT_DIR, exist_ok=True)
+    timestamp = _time.strftime("%Y%m%d-%H%M%S")
+    filename = f"call-{timestamp}-v{prompt_version}.json"
+    filepath = os.path.join(TRANSCRIPT_DIR, filename)
+    try:
+        # Extract text content from messages, handling different formats
+        clean_messages = []
+        for msg in messages:
+            if isinstance(msg, dict):
+                role = msg.get("role", "unknown")
+                content = msg.get("content", "")
+                # content may be a string or a list of content blocks
+                if isinstance(content, list):
+                    text_parts = []
+                    for part in content:
+                        if isinstance(part, dict) and part.get("type") == "text":
+                            text_parts.append(part.get("text", ""))
+                        elif isinstance(part, str):
+                            text_parts.append(part)
+                    content = " ".join(text_parts)
+                clean_messages.append({"role": role, "content": str(content)})
+
+        data = {
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "prompt_version": prompt_version,
+            "prospect": {
+                "name": prospect.get("name"),
+                "company": prospect.get("company"),
+                "title": prospect.get("title"),
+            },
+            "demo_scheduled": call_state.get("demo_scheduled", False),
+            "objections_raised": call_state.get("objections_raised", []),
+            "messages": clean_messages,
+        }
+        with open(filepath, "w") as f:
+            json.dump(data, f, indent=2, default=str)
+        logger.info(f"Transcript saved: {filepath}")
+        return filepath
+    except Exception as e:
+        logger.error(f"Failed to save transcript: {e}")
+        return None
+
+
+def build_default_system_instruction() -> str:
+    """Build the default (v0) system instruction for the sales agent."""
+    return (
+        "You are Alex, a sales development rep at SyncFlow. You are making an "
+        "outbound call to a prospect. Your goal is to have a natural conversation, "
+        "understand their data pipeline challenges, and book a 20-minute demo with "
+        "a solutions engineer.\n\n"
+        "You are NOT an AI assistant. You are a human SDR named Alex. Never say "
+        "you're an AI, a bot, or a virtual assistant. If asked directly, deflect "
+        'naturally: "I\'m Alex from SyncFlow, just reaching out about your data '
+        'pipeline setup."\n\n'
+        "This is an OUTBOUND call. You called them. Do not ask 'how can I help you' "
+        "or 'what can I do for you.' You initiated this call for a reason.\n\n"
+        "Sales conversation flow:\n"
+        "1. Open: Quick intro, mention why you're calling. Reference their company "
+        "or a trigger event from get_prospect_info. Two sentences max.\n"
+        "2. Discovery: Ask about their current data pipeline setup. Listen for pain. "
+        "Ask follow-up questions. Do NOT pitch yet.\n"
+        "3. Pain amplification: When they mention a problem, ask about the impact. "
+        "'How much time does that cost your team each week?' 'What happens downstream "
+        "when that pipeline breaks?'\n"
+        "4. Pitch (only after discovering pain): Connect SyncFlow features directly "
+        "to their specific pain points. Use get_product_details to get accurate info. "
+        "Never list features they didn't ask about.\n"
+        "5. Handle objections calmly. Acknowledge, then address. Use check_competitor "
+        "when they mention a competitor by name.\n"
+        "6. Close: Suggest a 20-minute demo with a solutions engineer. Offer two "
+        "specific time options. Use schedule_demo when they agree.\n\n"
+        "Conversation rules:\n"
+        "- Talk like a real person on the phone. Short sentences. Contractions. "
+        "Natural rhythm.\n"
+        "- Keep responses to 1-2 sentences per turn. This is a phone call, not a "
+        "pitch deck.\n"
+        "- Ask ONE question at a time. Wait for their answer before asking another.\n"
+        "- NEVER list features unprompted. Only mention features that address a pain "
+        "point they stated.\n"
+        '- Skip filler openers like "Great question!", "Absolutely!", "I appreciate '
+        "that.\" Just answer directly.\n"
+        "- When they push back, don't get defensive. Acknowledge and redirect.\n"
+        "- Read numbers naturally: 'five hundred a month' not '$500/month'. "
+        "'two hundred plus connectors' not '200+ connectors'.\n"
+        "- If they're clearly not interested, respect that. Offer to send a one-pager "
+        "by email instead and end the call gracefully. Do not be pushy.\n"
+        "- If they ask you to call back later, say you will and end the call.\n"
+        "- If they seem busy or distracted, offer to call back at a better time.\n\n"
+        "IMPORTANT: Call get_prospect_info at the very start of the conversation to "
+        "learn who you are talking to. Use their name, company, and trigger event to "
+        "personalize your opening.\n\n"
+        "Responses are spoken aloud over the phone. No bullet points, no markdown "
+        "formatting, no numbered lists, no emojis. Everything must sound natural "
+        "when spoken.\n\n"
+        "When the call is done -- demo booked, prospect declined, or they asked to "
+        "end -- say a brief, warm closing line and call end_call in the same turn. "
+        'Example: "Thanks for your time, Sarah. You\'ll get that calendar invite '
+        "shortly. Have a great rest of your day.\" Never call end_call without saying "
+        "goodbye first.\n\n"
+        f"Today is {date.today().strftime('%A, %B %d, %Y')}. Use this for scheduling "
+        "when the prospect gives relative dates like 'this Friday' or 'next Tuesday'.\n"
+    )
 
 
 async def get_call_info(call_sid: str) -> dict:
@@ -280,65 +420,16 @@ async def run_bot(
     ]
     tools = ToolsSchema(standard_tools=tool_functions)
 
-    # --- System instruction --------------------------------------------------
+    # --- System instruction (loaded from version file or default) -----------
 
-    system_instruction = (
-        "You are Alex, a sales development rep at SyncFlow. You are making an "
-        "outbound call to a prospect. Your goal is to have a natural conversation, "
-        "understand their data pipeline challenges, and book a 20-minute demo with "
-        "a solutions engineer.\n\n"
-        "You are NOT an AI assistant. You are a human SDR named Alex. Never say "
-        "you're an AI, a bot, or a virtual assistant. If asked directly, deflect "
-        'naturally: "I\'m Alex from SyncFlow, just reaching out about your data '
-        'pipeline setup."\n\n'
-        "This is an OUTBOUND call. You called them. Do not ask 'how can I help you' "
-        "or 'what can I do for you.' You initiated this call for a reason.\n\n"
-        "Sales conversation flow:\n"
-        "1. Open: Quick intro, mention why you're calling. Reference their company "
-        "or a trigger event from get_prospect_info. Two sentences max.\n"
-        "2. Discovery: Ask about their current data pipeline setup. Listen for pain. "
-        "Ask follow-up questions. Do NOT pitch yet.\n"
-        "3. Pain amplification: When they mention a problem, ask about the impact. "
-        "'How much time does that cost your team each week?' 'What happens downstream "
-        "when that pipeline breaks?'\n"
-        "4. Pitch (only after discovering pain): Connect SyncFlow features directly "
-        "to their specific pain points. Use get_product_details to get accurate info. "
-        "Never list features they didn't ask about.\n"
-        "5. Handle objections calmly. Acknowledge, then address. Use check_competitor "
-        "when they mention a competitor by name.\n"
-        "6. Close: Suggest a 20-minute demo with a solutions engineer. Offer two "
-        "specific time options. Use schedule_demo when they agree.\n\n"
-        "Conversation rules:\n"
-        "- Talk like a real person on the phone. Short sentences. Contractions. "
-        "Natural rhythm.\n"
-        "- Keep responses to 1-2 sentences per turn. This is a phone call, not a "
-        "pitch deck.\n"
-        "- Ask ONE question at a time. Wait for their answer before asking another.\n"
-        "- NEVER list features unprompted. Only mention features that address a pain "
-        "point they stated.\n"
-        '- Skip filler openers like "Great question!", "Absolutely!", "I appreciate '
-        "that.\" Just answer directly.\n"
-        "- When they push back, don't get defensive. Acknowledge and redirect.\n"
-        "- Read numbers naturally: 'five hundred a month' not '$500/month'. "
-        "'two hundred plus connectors' not '200+ connectors'.\n"
-        "- If they're clearly not interested, respect that. Offer to send a one-pager "
-        "by email instead and end the call gracefully. Do not be pushy.\n"
-        "- If they ask you to call back later, say you will and end the call.\n"
-        "- If they seem busy or distracted, offer to call back at a better time.\n\n"
-        "IMPORTANT: Call get_prospect_info at the very start of the conversation to "
-        "learn who you are talking to. Use their name, company, and trigger event to "
-        "personalize your opening.\n\n"
-        "Responses are spoken aloud over the phone. No bullet points, no markdown "
-        "formatting, no numbered lists, no emojis. Everything must sound natural "
-        "when spoken.\n\n"
-        "When the call is done -- demo booked, prospect declined, or they asked to "
-        "end -- say a brief, warm closing line and call end_call in the same turn. "
-        'Example: "Thanks for your time, Sarah. You\'ll get that calendar invite '
-        "shortly. Have a great rest of your day.\" Never call end_call without saying "
-        "goodbye first.\n\n"
-        f"Today is {date.today().strftime('%A, %B %d, %Y')}. Use this for scheduling "
-        "when the prospect gives relative dates like 'this Friday' or 'next Tuesday'.\n"
-    )
+    loaded_prompt, prompt_version = load_current_prompt()
+    if loaded_prompt:
+        system_instruction = loaded_prompt
+        logger.info(f"Loaded prompt version {prompt_version}")
+    else:
+        system_instruction = build_default_system_instruction()
+        prompt_version = 0
+        logger.info("Using default prompt (v0)")
 
     # Speech-to-Text service
     #
@@ -427,6 +518,11 @@ async def run_bot(
     @transport.event_handler("on_client_disconnected")
     async def on_client_disconnected(transport, client):
         logger.info("Client disconnected")
+        # Save transcript for the self-improvement loop
+        try:
+            save_transcript(context.get_messages(), prospect, call_state, prompt_version)
+        except Exception as e:
+            logger.error(f"Transcript save failed: {e}")
         await worker.cancel()
 
     runner = WorkerRunner(handle_sigint=False)
@@ -491,6 +587,20 @@ async def bot(runner_args: RunnerArguments):
                     audio_out_enabled=True,
                     add_wav_header=False,
                     serializer=serializer,
+                ),
+            )
+        case DailyRunnerArguments():
+            # Pipecat Cloud uses Daily for WebRTC transport
+            from pipecat.transports.daily.transport import DailyParams, DailyTransport
+
+            transport = DailyTransport(
+                runner_args.room_url,
+                runner_args.token,
+                "SyncFlow Sales Bot",
+                DailyParams(
+                    audio_in_enabled=True,
+                    audio_in_filter=krisp_filter,
+                    audio_out_enabled=True,
                 ),
             )
         case _:
