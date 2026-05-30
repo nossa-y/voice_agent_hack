@@ -1,0 +1,41 @@
+{
+  "timestamp": "2026-05-30T21:34:56.465008+00:00",
+  "prompt_version": 1,
+  "prospect": {
+    "name": "Marcus Johnson",
+    "company": "GreenPath Logistics",
+    "title": "Head of Data"
+  },
+  "demo_scheduled": false,
+  "objections_raised": [],
+  "messages": [
+    {
+      "role": "user",
+      "content": "You just connected on an outbound sales call. The prospect picked up the phone. Call get_prospect_info first to learn about them, then greet them with a brief, natural opener. Remember: you called them, so don't ask how you can help."
+    },
+    {
+      "role": "assistant",
+      "content": ""
+    },
+    {
+      "role": "tool",
+      "content": "{\"name\": \"Marcus Johnson\", \"title\": \"Head of Data\", \"company\": \"GreenPath Logistics\", \"company_size\": \"800 employees\", \"industry\": \"Logistics and Supply Chain\", \"pain_points\": [\"Running 40 plus Airbyte pipelines that keep breaking when schemas change\", \"Spending 20 hours a week on pipeline maintenance instead of analysis\", \"CEO wants a unified dashboard but data is scattered across 6 systems\"], \"current_tools\": \"Airbyte (self-hosted), PostgreSQL, Metabase, custom Python scripts\", \"trigger_event\": \"Their lead data engineer just quit, and nobody else knows how to maintain the Airbyte setup\"}"
+    },
+    {
+      "role": "user",
+      "content": "no thanks"
+    },
+    {
+      "role": "assistant",
+      "content": "\u2713 Hi Marcus, this is Alex from SyncFlow. I saw that your lead data engineer just quit and wanted to check in on how the Airbyte pipelines are holding up without them. Just to confirm,"
+    },
+    {
+      "role": "assistant",
+      "content": ""
+    },
+    {
+      "role": "tool",
+      "content": "{\"name\": \"Marcus Johnson\", \"title\": \"Head of Data\", \"company\": \"GreenPath Logistics\", \"company_size\": \"800 employees\", \"industry\": \"Logistics and Supply Chain\", \"pain_points\": [\"Running 40 plus Airbyte pipelines that keep breaking when schemas change\", \"Spending 20 hours a week on pipeline maintenance instead of analysis\", \"CEO wants a unified dashboard but data is scattered across 6 systems\"], \"current_tools\": \"Airbyte (self-hosted), PostgreSQL, Metabase, custom Python scripts\", \"trigger_event\": \"Their lead data engineer just quit, and nobody else knows how to maintain the Airbyte setup\"}"
+    }
+  ]
+}
