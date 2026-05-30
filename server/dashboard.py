@@ -144,6 +144,60 @@ async def get_scenarios():
         return {"scenarios": [], "error": str(e)}
 
 
+@app.post("/api/call-prospect")
+async def call_prospect(request_data: dict = None):
+    """Initiate an outbound Twilio call to a prospect, connected to the Pipecat bot."""
+    try:
+        from twilio.rest import Client
+
+        account_sid = os.environ["TWILIO_ACCOUNT_SID"]
+        api_key_sid = os.environ["TWILIO_API_KEY_SID"]
+        api_key_secret = os.environ["TWILIO_API_KEY_SECRET"]
+        from_number = os.environ["TWILIO_PHONE_NUMBER"]
+
+        # Default prospect number, can be overridden via request body
+        to_number = "+1234567890"
+        if request_data and request_data.get("to"):
+            to_number = request_data["to"]
+
+        client = Client(api_key_sid, api_key_secret, account_sid)
+
+        # Route Twilio stream to local bot via ngrok
+        # Pipecat Cloud's Twilio WS handler conflicts with our bot's parser,
+        # so we route directly to the local bot's /ws endpoint
+        bot_ws_url = os.environ.get("BOT_WS_URL", "")
+        if not bot_ws_url:
+            return JSONResponse(
+                {"error": "BOT_WS_URL not set. Run: ngrok http 7860 and set BOT_WS_URL in .env"},
+                status_code=400,
+            )
+
+        twiml = (
+            '<?xml version="1.0" encoding="UTF-8"?>'
+            "<Response>"
+            "<Connect>"
+            f'<Stream url="{bot_ws_url}">'
+            "</Stream>"
+            "</Connect>"
+            "</Response>"
+        )
+
+        call = client.calls.create(
+            twiml=twiml,
+            to=to_number,
+            from_=from_number,
+        )
+
+        return {
+            "status": "calling",
+            "call_sid": call.sid,
+            "to": to_number,
+            "from": from_number,
+        }
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
 @app.post("/api/start-session")
 async def start_session():
     """Start a Pipecat Cloud session and return Daily room URL for embedding."""
@@ -415,38 +469,104 @@ tailwind.config = {
       <p class="text-sm text-ink-light mt-1" id="metricVersionSub">Loading...</p>
     </div>
     <div class="glass p-6">
-      <p class="text-xs text-ink-muted uppercase tracking-widest mb-1">Cekura Score</p>
+      <p class="text-xs text-ink-muted uppercase tracking-widest mb-1">Scenarios Passed</p>
       <p class="text-3xl font-bold text-ink" id="metricScore">--</p>
       <p class="text-sm text-ink-light mt-1" id="metricScoreSub">Loading...</p>
     </div>
     <div class="glass p-6">
-      <p class="text-xs text-ink-muted uppercase tracking-widest mb-1">Improvement Cycles</p>
+      <p class="text-xs text-ink-muted uppercase tracking-widest mb-1">Prompt Rewrites</p>
       <p class="text-3xl font-bold text-ink" id="metricCycles">--</p>
       <p class="text-sm text-ink-light mt-1" id="metricCyclesSub">Loading...</p>
     </div>
   </section>
 
-  <!-- Run Improvement CTA -->
-  <section class="mb-10">
-    <div class="glass p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-      <div>
-        <p class="text-ink font-semibold">Run Improvement Cycle</p>
-        <p class="text-sm text-ink-light">Runs 5 Cekura test scenarios, analyzes failures with Nemotron, generates improved prompt. Takes 3-5 min.</p>
+  <!-- 1. Talk to the Agent (TOP) -->
+  <section class="glass p-6 mb-8">
+    <h2 class="text-base font-semibold text-ink mb-4">Talk to the Agent</h2>
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div class="lg:col-span-2">
+        <div id="callArea">
+          <p class="text-sm text-ink-light mb-5">Try the agent yourself via WebRTC, or have it call a real prospect's phone.</p>
+          <div class="flex flex-wrap gap-3 mb-3">
+            <button onclick="startCall()" id="callBtn2" class="btn-primary inline-flex items-center gap-2 px-6 py-3 rounded-xl font-semibold text-sm">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 1a7 7 0 100 14A7 7 0 008 1z" stroke="currentColor" stroke-width="1.5"/><path d="M6.5 5l4 3-4 3V5z" fill="currentColor"/></svg>
+              Try in Browser
+            </button>
+            <button onclick="callProspect()" id="callProspectBtn" class="inline-flex items-center gap-2 px-6 py-3 rounded-xl font-semibold text-sm text-white transition" style="background:linear-gradient(135deg,#16a34a,#15803d);box-shadow:0 2px 8px rgba(22,163,74,0.3)">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M14.5 11.1v1.9a1.3 1.3 0 01-1.4 1.3A12.8 12.8 0 011.7 2.9 1.3 1.3 0 013 1.5h1.9a1.3 1.3 0 011.3 1.1c.1.6.2 1.2.4 1.8a1.3 1.3 0 01-.3 1.3l-.8.8a10.2 10.2 0 004.5 4.5l.8-.8a1.3 1.3 0 011.3-.3c.6.2 1.2.3 1.8.4a1.3 1.3 0 011.1 1.3z" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <span id="callProspectText">Call Prospect</span>
+            </button>
+          </div>
+          <div id="phoneInput" class="flex gap-2 items-center mb-3">
+            <input type="tel" id="prospectPhone" value="+1234567890" placeholder="+1234567890" class="px-3 py-2 rounded-lg text-sm border border-surface-300 bg-surface-100 text-ink w-48 focus:outline-none focus:border-blue-500">
+            <span class="text-xs text-ink-muted">Prospect's phone number</span>
+          </div>
+          <p id="callStatus" class="text-xs text-ink-muted mt-3 hidden"></p>
+        </div>
+        <div id="callEmbed" class="hidden">
+          <iframe id="callFrame" allow="microphone; camera; autoplay;" style="width:100%; height:400px; border:none; border-radius:12px; background:#000;"></iframe>
+          <button onclick="endCall()" class="mt-3 px-4 py-2 rounded-lg text-xs font-medium bg-red-600 hover:bg-red-500 text-white transition">
+            End Call
+          </button>
+        </div>
       </div>
-      <button onclick="runImprove()" id="improveBtn" class="btn-success px-6 py-3 rounded-xl text-ink font-semibold text-sm whitespace-nowrap flex items-center gap-2">
-        <span id="improveBtnText">Run Improvement</span>
-        <span id="improveBtnSpinner" class="spinner hidden"></span>
-      </button>
+      <div>
+        <p class="text-xs text-ink-muted uppercase tracking-widest mb-3">Today's Call List</p>
+        <div class="space-y-2">
+          <div class="p-3 rounded-xl bg-surface-100 border border-surface-300/50">
+            <p class="text-xs font-semibold text-ink">Jake Morrison</p>
+            <p class="text-xs text-ink-muted">VP Sales Ops, Packsmith</p>
+          </div>
+          <div class="p-3 rounded-xl bg-surface-100 border border-surface-300/50">
+            <p class="text-xs font-semibold text-ink">Lisa Tran</p>
+            <p class="text-xs text-ink-muted">Head of Data, Ridgewell</p>
+          </div>
+          <div class="p-3 rounded-xl bg-surface-100 border border-surface-300/50">
+            <p class="text-xs font-semibold text-ink">Dan Cooper</p>
+            <p class="text-xs text-ink-muted">Dir RevOps, Folio Systems</p>
+          </div>
+          <div class="p-3 rounded-xl bg-surface-100 border border-surface-300/50">
+            <p class="text-xs font-semibold text-ink">Maria Santos</p>
+            <p class="text-xs text-ink-muted">Ops Lead, Trellus</p>
+          </div>
+        </div>
+      </div>
     </div>
-    <div id="statusBar" class="mt-3 text-center text-sm text-ink-light hidden">
+    <div id="statusBar" class="mt-4 p-4 rounded-xl bg-surface-100 text-center text-sm text-ink-light hidden">
       <span id="statusText"></span>
     </div>
   </section>
 
-  <!-- Two Column: Timeline + Changes -->
-  <section class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+  <!-- 2. Cekura Test Results -->
+  <section class="glass p-6 mb-8">
+    <div class="flex items-center justify-between mb-5">
+      <h2 class="text-base font-semibold text-ink flex items-center gap-2">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 3h12M2 8h12M2 13h12" stroke="#f59e0b" stroke-width="1.5" stroke-linecap="round"/></svg>
+        Cekura Test Results
+      </h2>
+      <button onclick="runImprove()" id="improveBtn" class="btn-success px-4 py-2 rounded-xl font-semibold text-sm flex items-center gap-2">
+        <span id="improveBtnText">Run Improvement</span>
+        <span id="improveBtnSpinner" class="spinner hidden"></span>
+      </button>
+    </div>
+    <div id="scenarios">
+      <p class="text-ink-muted text-sm">Loading scenarios...</p>
+    </div>
+  </section>
 
-    <!-- Evolution History -->
+  <!-- 3. Prompt Diff -->
+  <section class="glass p-6 mb-8">
+    <h2 class="text-base font-semibold text-ink mb-4 flex items-center gap-2">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="1" y="1" width="14" height="14" rx="3" stroke="#a78bfa" stroke-width="1.5"/><path d="M5 5h6M5 8h4M5 11h5" stroke="#a78bfa" stroke-width="1.5" stroke-linecap="round"/></svg>
+      Prompt Diff
+    </h2>
+    <div id="diffView" class="font-mono text-xs leading-relaxed overflow-auto max-h-80 p-4 rounded-xl bg-surface-200">
+      <p class="text-ink-muted">Loading...</p>
+    </div>
+  </section>
+
+  <!-- 4. Evolution History + Latest Changes -->
+  <section class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
     <div class="glass p-6">
       <h2 class="text-base font-semibold text-ink mb-5 flex items-center gap-2">
         <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 14V2m0 12h12M5 11l3-4 3 2 3-5" stroke="#3b82f6" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -456,8 +576,6 @@ tailwind.config = {
         <p class="text-ink-muted text-sm">Loading...</p>
       </div>
     </div>
-
-    <!-- Current Version Changes -->
     <div class="glass p-6">
       <h2 class="text-base font-semibold text-ink mb-5 flex items-center gap-2">
         <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 1v14M1 8h14" stroke="#22c55e" stroke-width="1.5" stroke-linecap="round"/></svg>
@@ -469,70 +587,8 @@ tailwind.config = {
     </div>
   </section>
 
-  <!-- Prompt Diff -->
-  <section class="glass p-6 mb-8">
-    <h2 class="text-base font-semibold text-ink mb-4 flex items-center gap-2">
-      <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="1" y="1" width="14" height="14" rx="3" stroke="#a78bfa" stroke-width="1.5"/><path d="M5 5h6M5 8h4M5 11h5" stroke="#a78bfa" stroke-width="1.5" stroke-linecap="round"/></svg>
-      Prompt Diff
-    </h2>
-    <div id="diffView" class="font-mono text-xs leading-relaxed overflow-auto max-h-80 p-4 rounded-xl bg-surface-200">
-      <p class="text-ink-muted">Loading...</p>
-    </div>
-  </section>
-
-  <!-- Scenario Results -->
-  <section class="glass p-6 mb-8">
-    <h2 class="text-base font-semibold text-ink mb-5 flex items-center gap-2">
-      <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 3h12M2 8h12M2 13h12" stroke="#f59e0b" stroke-width="1.5" stroke-linecap="round"/></svg>
-      Cekura Test Results
-    </h2>
-    <div id="scenarios">
-      <p class="text-ink-muted text-sm">Loading scenarios...</p>
-    </div>
-  </section>
-
-  <!-- Two Column: Try Agent + Architecture -->
+  <!-- How the Loop Works + Tech Stack -->
   <section class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-
-    <!-- Try the Agent (embedded) -->
-    <div class="glass p-6">
-      <h2 class="text-base font-semibold text-ink mb-4">Talk to the Agent</h2>
-      <div id="callArea">
-        <p class="text-sm text-ink-light mb-5">Connect via WebRTC and have a live sales conversation. The agent pitches ColdLoop as a random prospect persona.</p>
-        <button onclick="startCall()" id="callBtn2" class="btn-primary inline-flex items-center gap-2 px-6 py-3 rounded-xl text-ink font-semibold text-sm">
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 1a7 7 0 100 14A7 7 0 008 1z" stroke="currentColor" stroke-width="1.5"/><path d="M6.5 5l4 3-4 3V5z" fill="currentColor"/></svg>
-          Start Call
-        </button>
-        <p id="callStatus" class="text-xs text-ink-muted mt-3 hidden"></p>
-      </div>
-      <div id="callEmbed" class="hidden">
-        <iframe id="callFrame" allow="microphone; camera; autoplay;" style="width:100%; height:400px; border:none; border-radius:12px; background:#000;"></iframe>
-        <button onclick="endCall()" class="mt-3 px-4 py-2 rounded-lg text-xs font-medium bg-red-600 hover:bg-red-500 text-white transition">
-          End Call
-        </button>
-      </div>
-      <div class="mt-5 grid grid-cols-2 gap-3">
-        <div class="p-3 rounded-xl bg-surface-100 border border-surface-300/50">
-          <p class="text-xs font-semibold text-ink">Sarah Chen</p>
-          <p class="text-xs text-ink-muted">VP RevOps, Meridian Analytics</p>
-        </div>
-        <div class="p-3 rounded-xl bg-surface-100 border border-surface-300/50">
-          <p class="text-xs font-semibold text-ink">Marcus Johnson</p>
-          <p class="text-xs text-ink-muted">Head of Data, GreenPath</p>
-        </div>
-        <div class="p-3 rounded-xl bg-surface-100 border border-surface-300/50">
-          <p class="text-xs font-semibold text-ink">Priya Patel</p>
-          <p class="text-xs text-ink-muted">Dir Finance Ops, NovaBridge</p>
-        </div>
-        <div class="p-3 rounded-xl bg-surface-100 border border-surface-300/50">
-          <p class="text-xs font-semibold text-ink">David Kim</p>
-          <p class="text-xs text-ink-muted">Ops Manager, Atlas Health Tech</p>
-        </div>
-      </div>
-      <p class="text-xs text-ink-muted mt-3">Agent randomly selects a persona each call</p>
-    </div>
-
-    <!-- How the Loop Works -->
     <div class="glass p-6">
       <h2 class="text-base font-semibold text-ink mb-5">How the Loop Works</h2>
       <div class="space-y-5">
@@ -595,7 +651,7 @@ tailwind.config = {
 <footer class="border-t border-surface-300/50 py-6">
   <div class="max-w-7xl mx-auto px-6 flex flex-col sm:flex-row items-center justify-between text-xs text-ink-muted gap-2">
     <span>Built at YC Voice Agents Hackathon - Pipecat + Cekura + NVIDIA Nemotron</span>
-    <span>by SyncFlow team</span>
+    <span>by ColdLoop team</span>
   </div>
 </footer>
 
@@ -626,11 +682,12 @@ function renderMetrics(versions) {
   document.getElementById('metricVersionSub').textContent = 'Prompt evolved ' + curr.version + ' time' + (curr.version !== 1 ? 's' : '');
   document.getElementById('headerVersion').textContent = 'v' + curr.version + ' Live';
 
-  document.getElementById('metricScore').textContent = rate !== null ? rate + '%' : '--';
-  document.getElementById('metricScoreSub').textContent = rate !== null ? (rate >= 60 ? 'Performing well' : 'Room to improve') : 'No score yet';
+  const passed = rate !== null ? Math.round(rate / 20) : 0;
+  document.getElementById('metricScore').textContent = rate !== null ? passed + '/5' : '--';
+  document.getElementById('metricScoreSub').textContent = rate !== null ? passed + ' of 5 Cekura scenarios passed' : 'No score yet';
 
   document.getElementById('metricCycles').textContent = versions.length - 1;
-  document.getElementById('metricCyclesSub').textContent = versions.length <= 1 ? 'Run your first cycle' : 'Across ' + versions.length + ' versions';
+  document.getElementById('metricCyclesSub').textContent = versions.length <= 1 ? 'Run your first cycle' : (versions.length - 1) + ' prompt rewrites by Nemotron';
 }
 
 function renderTimeline(versions) {
@@ -807,7 +864,42 @@ function endCall() {
   embed.classList.add('hidden');
   if (btn2) btn2.classList.remove('hidden');
   area.querySelector('p').classList.remove('hidden');
-  if (status) { status.textContent = 'Call ended.'; }
+  if (status) { status.classList.remove('hidden'); status.textContent = 'Call ended. Starting improvement cycle...'; }
+
+  // Auto-trigger improvement loop after call ends
+  setTimeout(() => runImprove(), 1500);
+}
+
+async function callProspect() {
+  const btn = document.getElementById('callProspectBtn');
+  const btnText = document.getElementById('callProspectText');
+  const status = document.getElementById('callStatus');
+  const phone = document.getElementById('prospectPhone').value.trim();
+
+  if (!phone) { alert('Enter a phone number'); return; }
+
+  btn.disabled = true;
+  btnText.textContent = 'Calling...';
+  if (status) { status.classList.remove('hidden'); status.textContent = 'Dialing ' + phone + '...'; }
+
+  try {
+    const res = await fetch('/api/call-prospect', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({to: phone}),
+    });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    if (status) {
+      status.classList.remove('hidden');
+      status.innerHTML = '<span class="text-green-600">Call initiated! SID: ' + data.call_sid + '</span><br><span class="text-ink-muted">The agent is now talking to ' + phone + '</span>';
+    }
+  } catch (e) {
+    if (status) { status.classList.remove('hidden'); status.innerHTML = '<span class="text-red-500">Failed: ' + ESC(e.message) + '</span>'; }
+  }
+
+  btn.disabled = false;
+  btnText.textContent = 'Call Prospect';
 }
 </script>
 </body>

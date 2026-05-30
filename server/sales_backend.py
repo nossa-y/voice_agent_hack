@@ -1,177 +1,189 @@
 #
-# ColdLoop Sales Agent — Mock backend data
+# Getcleed Sales Agent - Backend data
 #
-# Swap these dicts with real API calls when moving beyond the hackathon demo.
-# Prospect personas are selected randomly per call to keep demos varied.
+# Real product data from getcleed.com. Prospect personas are fictional
+# but represent the actual target market.
 #
 
-"""Mock backend data for the ColdLoop sales agent demo.
+"""Backend data for the Getcleed sales agent.
 
-This file exports product information, competitor comparisons, and prospect
-personas used by the sales agent bot. All data is fictional and designed
-for a compelling hackathon demo.
-
-Edit PROSPECT_PERSONAS to add or modify the prospects the agent will call.
-Edit SYNCFLOW_PRODUCT to change what the agent knows about the product.
-Edit COMPETITORS to update competitive positioning.
+Getcleed is an AI-powered B2B lead scoring and outreach intelligence platform.
+It monitors buying signals 24/7, scores prospects by timing and fit, and
+generates personalized outreach automatically.
 """
 
 SYNCFLOW_PRODUCT = {
-    "name": "ColdLoop",
-    "tagline": "Data pipelines that build themselves",
+    "name": "Getcleed",
+    "tagline": "Find leads at the right timing, not just the right fit",
     "description": (
-        "ColdLoop is a data pipeline platform for mid-market ops teams. "
-        "Connect any source to any destination, transform data with plain "
-        "English rules, and monitor pipeline health from one dashboard. "
-        "No engineering backlog required."
+        "Getcleed is an AI-powered prospecting platform that monitors the market "
+        "24/7 for buying signals - funding rounds, hiring spikes, leadership changes, "
+        "competitor mentions, product launches. It scores every account by fit, timing, "
+        "and urgency, then generates personalized outreach with a clear reason to reach out. "
+        "Your team stops cold-blasting lists and starts contacting people who are actually "
+        "ready to buy."
     ),
     "features": {
-        "connectors": {
-            "name": "Universal Connectors",
+        "signals": {
+            "name": "Live Buying Signals",
             "detail": (
-                "Pre-built connectors for over 200 sources and destinations "
-                "including Salesforce, HubSpot, Snowflake, BigQuery, Postgres, "
-                "Stripe, NetSuite, and Workday. New connectors ship every two weeks."
+                "Tracks over 100 buying signals in real time: funding rounds, hiring spikes, "
+                "LinkedIn activity, leadership changes, competitor mentions, product launches, "
+                "tech stack changes. Runs 24/7 even when your team is offline."
             ),
             "differentiator": (
-                "Most competitors top out at 50 to 80 connectors. "
-                "We have 200 plus and add more every sprint."
+                "Most tools give you a static list. We tell you WHO is ready to buy "
+                "and WHY right now. Timing is everything in outreach."
             ),
         },
-        "transformations": {
-            "name": "Plain English Transforms",
+        "scoring": {
+            "name": "Signal-Based Lead Scoring",
             "detail": (
-                "Write transformation rules in plain English. ColdLoop's AI "
-                "translates them into optimized SQL. No dbt, no data engineering "
-                "hire required."
+                "Every prospect gets scored on four dimensions: fit, timing, relevance, "
+                "and urgency. A company that just raised Series B and is hiring 3 SDRs "
+                "scores higher than one that's been quiet for 6 months."
             ),
             "differentiator": (
-                "Fivetran and Airbyte still require dbt or custom code for "
-                "transforms. We handle it natively."
+                "Traditional lead scoring uses firmographics. We score on real-time "
+                "market behavior. That's why our leads convert at 3x the rate of cold lists."
             ),
         },
-        "monitoring": {
-            "name": "Pipeline Health Dashboard",
+        "outreach": {
+            "name": "AI-Generated Outreach",
             "detail": (
-                "Real-time monitoring with anomaly detection. Get Slack or email "
-                "alerts when row counts drop, schemas change, or latency spikes. "
-                "Full data lineage graph."
+                "For every warm lead, Getcleed generates a personalized first email "
+                "with a specific reason to reach out. Not generic templates - each "
+                "message references the actual signal that triggered it."
             ),
             "differentiator": (
-                "Competitors charge extra for observability. "
-                "Ours is built in at every tier."
+                "Apollo and ZoomInfo give you contact data. We give you contact data "
+                "plus the reason to reach out plus a draft message. That's the whole workflow."
             ),
         },
-        "security": {
-            "name": "Enterprise Security",
+        "workflow": {
+            "name": "Team Workflow",
             "detail": (
-                "SOC 2 Type II certified. Data encrypted in transit and at rest. "
-                "Role-based access control, SSO, and audit logs. Your data never "
-                "touches our servers in the managed VPC option."
+                "Approve, edit, assign, or sync opportunities to your CRM. "
+                "Your team reviews AI-generated outreach before it goes out. "
+                "Full control, zero manual research."
             ),
             "differentiator": (
-                "We offer a managed VPC deployment where data never leaves your "
-                "cloud. Most competitors are SaaS-only."
+                "We're not an autopilot that spams. Your team stays in control. "
+                "The AI does the research, your reps make the calls."
             ),
         },
-        "speed": {
-            "name": "Real-Time Sync",
+        "enrichment": {
+            "name": "Contact Enrichment",
             "detail": (
-                "Sub-minute sync latency with CDC support. Batch or streaming, "
-                "your choice per pipeline. Handles up to 10 billion rows per day."
+                "Automatically enriches every lead with verified emails, LinkedIn "
+                "profiles, company data, tech stack, and recent activity. "
+                "No more bouncing emails or outdated contacts."
             ),
             "differentiator": (
-                "Fivetran's standard tier is 60-minute sync intervals. "
-                "Our base plan starts at sub-minute."
+                "Enrichment is included in every plan. Competitors charge per lookup "
+                "or require a separate data provider subscription."
             ),
         },
     },
     "pricing": {
-        "starter": {
-            "name": "Starter",
-            "price": "$500/month",
+        "pro": {
+            "name": "Pro",
+            "price": "$99/month",
             "details": (
-                "Up to 5 million rows per month, 20 connectors, email support. "
-                "Good for small teams getting started."
+                "Up to 1,000 leads analyzed per month, unlimited warm lead discovery, "
+                "AI-powered emails, contact enrichment, CRM integrations. "
+                "7-day free trial, no credit card required."
             ),
         },
-        "growth": {
-            "name": "Growth",
-            "price": "$2,000/month",
+        "max": {
+            "name": "Max",
+            "price": "Custom pricing for teams",
             "details": (
-                "Up to 50 million rows per month, unlimited connectors, plain "
-                "English transforms, Slack support, SSO. Most popular for "
-                "mid-market ops teams."
-            ),
-        },
-        "enterprise": {
-            "name": "Enterprise",
-            "price": "Custom pricing, typically $5,000 to $15,000/month",
-            "details": (
-                "Unlimited rows, managed VPC deployment, dedicated support "
-                "engineer, SLA guarantees, custom connectors, data lineage. "
-                "For teams with strict compliance needs."
+                "Unlimited leads, advanced signal customization, team seats, "
+                "dedicated support, custom integrations. For growth teams "
+                "and agencies running high-volume outreach."
             ),
         },
     },
-    "customers_count": "400+",
+    "customers_count": "Growing fast",
     "notable_segments": (
-        "mid-market ops teams, RevOps, finance ops, "
-        "data teams without dedicated engineers"
+        "B2B sales teams, founders doing their own outreach, SDR teams, "
+        "growth agencies, anyone tired of cold list grinding"
     ),
 }
 
 COMPETITORS = {
-    "fivetran": {
-        "name": "Fivetran",
+    "apollo": {
+        "name": "Apollo",
         "our_advantages": [
-            "We include transformations natively; Fivetran requires dbt as a separate tool and cost",
-            "Sub-minute sync on our base plan versus 60-minute intervals on Fivetran's standard tier",
-            "Our monitoring and anomaly detection is built in; Fivetran charges extra for their observability add-on",
-            "We're typically 30 to 40 percent less expensive at comparable volumes",
+            "We surface leads based on real-time buying signals, not just static filters",
+            "Every lead comes with a reason to reach out and a personalized draft email",
+            "Signal-based scoring means your team contacts people at the right moment, not randomly",
+            "At 99 dollars a month we're cheaper than Apollo's comparable plans",
         ],
         "their_strengths": [
-            "Larger brand name and more enterprise references",
-            "Slightly larger connector library, though we're closing the gap fast",
+            "Massive contact database with hundreds of millions of records",
+            "Well-known brand with a large user base",
         ],
         "talk_track": (
-            "Fivetran's a solid product, but their architecture was built for batch. "
-            "If your team needs faster sync or doesn't want to manage a separate dbt "
-            "layer, that's exactly where we shine."
+            "Apollo gives you a huge database and lets you filter it. That's useful, but "
+            "it's still cold outreach. Getcleed tells you who's actually showing buying "
+            "intent right now and why. The conversion difference is night and day."
         ),
     },
-    "airbyte": {
-        "name": "Airbyte",
+    "zoominfo": {
+        "name": "ZoomInfo",
         "our_advantages": [
-            "Fully managed with no infrastructure to maintain; Airbyte's open-source version requires self-hosting",
-            "Plain English transforms built in; Airbyte has no native transformation layer",
-            "Enterprise support with SLAs; Airbyte Cloud support is still maturing",
+            "Fraction of the cost. ZoomInfo starts at thousands per month, we're 99 dollars",
+            "We include the outreach intelligence, not just the contact data",
+            "Real-time signals versus quarterly-updated firmographic data",
+            "No long-term contract required. Month to month.",
         ],
         "their_strengths": [
-            "Open-source option appeals to engineering-heavy teams",
-            "Lower entry cost if you self-host and have the engineering bandwidth",
+            "Deepest enterprise contact database in the market",
+            "Intent data partnerships and technographic data",
         ],
         "talk_track": (
-            "Airbyte's great if you have engineers who want to self-host and maintain "
-            "pipelines. For ops teams who want it to just work without a DevOps hire, "
-            "ColdLoop is the better fit."
+            "ZoomInfo is the gold standard for contact data, but it costs 10x what we do "
+            "and still doesn't tell you WHEN to reach out. Most teams are overpaying for "
+            "data they don't fully use. Getcleed gives you the signal plus the outreach."
         ),
     },
-    "stitch": {
-        "name": "Stitch",
+    "linkedin sales navigator": {
+        "name": "LinkedIn Sales Navigator",
         "our_advantages": [
-            "Much broader connector library, 200 plus versus Stitch's roughly 130",
-            "Real-time CDC sync; Stitch only supports batch replication",
-            "Active development and support; Stitch has had limited updates since the Talend acquisition",
+            "Automated signal monitoring versus manual searching and scrolling",
+            "AI-generated outreach drafts versus writing every message yourself",
+            "Tracks signals beyond LinkedIn: funding, hiring, tech changes, competitor activity",
+            "Lead scoring that combines all signals, not just LinkedIn activity",
         ],
         "their_strengths": [
-            "Simple pricing model",
-            "Familiar to teams already using Talend's ecosystem",
+            "Direct access to the LinkedIn network and InMail",
+            "Real-time LinkedIn activity and engagement data",
         ],
         "talk_track": (
-            "Stitch hasn't seen much investment since Talend acquired them. If you're "
-            "evaluating options, you'll find ColdLoop is more actively developed with "
-            "better real-time capabilities."
+            "Sales Nav is great for manual prospecting, but it's a lot of scrolling "
+            "and guesswork. Getcleed automates the signal detection and tells you "
+            "exactly who to contact and what to say. Your reps spend time selling, "
+            "not researching."
+        ),
+    },
+    "clay": {
+        "name": "Clay",
+        "our_advantages": [
+            "No-code setup in minutes versus Clay's complex workflow builder",
+            "Built-in signal monitoring versus having to configure data sources yourself",
+            "AI outreach generation included versus needing separate AI tools",
+            "Simpler pricing, no per-row credits to manage",
+        ],
+        "their_strengths": [
+            "Extremely flexible data enrichment workflows",
+            "Power-user tool for teams with technical GTM ops",
+        ],
+        "talk_track": (
+            "Clay is powerful if you have someone who loves building workflows. "
+            "Getcleed is for teams who want results without the setup. "
+            "Plug in your ICP, and we start finding warm leads immediately."
         ),
     },
 }
@@ -179,70 +191,70 @@ COMPETITORS = {
 PROSPECT_PERSONAS = [
     {
         "id": "prospect_1",
-        "name": "Sarah Chen",
-        "title": "VP of Revenue Operations",
-        "company": "Meridian Analytics",
-        "company_size": "350 employees",
-        "industry": "B2B SaaS",
+        "name": "Jake Morrison",
+        "title": "VP of Sales",
+        "company": "Packsmith",
+        "company_size": "120 employees",
+        "industry": "E-commerce Fulfillment Software",
         "pain_points": [
-            "Data team is bottlenecked; RevOps requests sit in the engineering backlog for weeks",
-            "Currently using spreadsheet exports to move data between Salesforce and their data warehouse",
-            "Pipeline breaks go undetected until someone notices stale dashboards",
+            "SDR team is burning through cold lists with under 2% reply rates",
+            "Reps spend 3 hours a day researching before they can even write an email",
+            "No way to know which accounts are actually in-market right now",
         ],
-        "current_tools": "Salesforce, HubSpot, Snowflake, manual CSV exports",
+        "current_tools": "Apollo, Salesforce, Outreach",
         "budget_authority": True,
-        "trigger_event": "Just hired a new CRO who wants real-time pipeline visibility within 90 days",
-        "objection_tendency": "Will ask about implementation timeline and resources needed",
+        "trigger_event": "Just missed Q1 pipeline target by 30%, board is asking hard questions",
+        "objection_tendency": "Will ask about data accuracy and integration with existing stack",
     },
     {
         "id": "prospect_2",
-        "name": "Marcus Johnson",
-        "title": "Head of Data",
-        "company": "GreenPath Logistics",
-        "company_size": "800 employees",
-        "industry": "Logistics and Supply Chain",
+        "name": "Lisa Tran",
+        "title": "Head of Growth",
+        "company": "Ridgewell",
+        "company_size": "45 employees",
+        "industry": "Supply Chain Software",
         "pain_points": [
-            "Running 40 plus Airbyte pipelines that keep breaking when schemas change",
-            "Spending 20 hours a week on pipeline maintenance instead of analysis",
-            "CEO wants a unified dashboard but data is scattered across 6 systems",
+            "Founder-led sales is hitting a ceiling, needs to scale outbound without hiring 5 SDRs",
+            "Tried ZoomInfo but the contract was 20K a year and most leads were stale",
+            "Spending too much time on LinkedIn manually looking for prospects",
         ],
-        "current_tools": "Airbyte (self-hosted), PostgreSQL, Metabase, custom Python scripts",
-        "budget_authority": False,
-        "trigger_event": "Their lead data engineer just quit, and nobody else knows how to maintain the Airbyte setup",
-        "objection_tendency": "Will push back on cost and want to compare with fixing their current Airbyte setup",
+        "current_tools": "LinkedIn Sales Navigator, HubSpot, Google Sheets",
+        "budget_authority": True,
+        "trigger_event": "Just closed Series A, need to show 3x pipeline growth to investors",
+        "objection_tendency": "Price-conscious, will compare with doing it manually or hiring an SDR",
     },
     {
         "id": "prospect_3",
-        "name": "Priya Patel",
-        "title": "Director of Finance Operations",
-        "company": "NovaBridge Financial",
-        "company_size": "200 employees",
-        "industry": "Financial Services",
+        "name": "Dan Cooper",
+        "title": "Director of Business Development",
+        "company": "Folio Systems",
+        "company_size": "300 employees",
+        "industry": "RevOps Software",
         "pain_points": [
-            "Month-end close takes 8 days because data from NetSuite, Stripe, and their billing system has to be manually reconciled",
-            "Compliance team needs audit trails for all data movement, which they currently track in spreadsheets",
-            "No visibility into when data was last synced or if numbers in reports are current",
+            "Outbound emails feel generic and get ignored. Reply rates dropped from 8% to 2% this year",
+            "No system to track which target accounts are showing buying signals",
+            "BDRs waste time on accounts that aren't ready, miss the ones that are",
         ],
-        "current_tools": "NetSuite, Stripe, QuickBooks, Google Sheets, Fivetran (considering switching)",
-        "budget_authority": True,
-        "trigger_event": "Failed an internal audit because they couldn't prove data lineage for a financial report",
-        "objection_tendency": "Will focus on security, compliance, and SOC 2 requirements",
+        "current_tools": "Salesforce, Outreach, Clay (trying it out)",
+        "budget_authority": False,
+        "trigger_event": "CEO mandate to double new client acquisition this year with same headcount",
+        "objection_tendency": "Will want proof of ROI and case studies from similar companies",
     },
     {
         "id": "prospect_4",
-        "name": "David Kim",
-        "title": "Operations Manager",
-        "company": "Atlas Health Tech",
-        "company_size": "150 employees",
-        "industry": "Health Tech",
+        "name": "Maria Santos",
+        "title": "SDR Manager",
+        "company": "Trellus",
+        "company_size": "200 employees",
+        "industry": "Sales Enablement",
         "pain_points": [
-            "Growing fast but ops processes don't scale; everything runs on tribal knowledge and manual steps",
-            "Sales and customer success use different data, leading to conflicting reports to leadership",
-            "Evaluated Fivetran but the quote came back at three times their budget",
+            "Team of 6 SDRs books maybe 15 meetings a month total. Target is 40",
+            "Using Apollo but reps just blast the same sequences to everyone",
+            "No way to prioritize which accounts to hit first each morning",
         ],
-        "current_tools": "HubSpot, Intercom, PostgreSQL, Google Sheets",
+        "current_tools": "Apollo, Salesloft, Salesforce",
         "budget_authority": True,
-        "trigger_event": "Series B funding closed last month; board wants operational metrics dashboards by next quarter",
-        "objection_tendency": "Price-sensitive, will want to see ROI math and a pilot program",
+        "trigger_event": "Two SDRs just quit, need to hit the same number with 4 people",
+        "objection_tendency": "Will ask how this is different from Apollo's buying signals feature",
     },
 ]
