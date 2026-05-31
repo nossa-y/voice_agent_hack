@@ -162,21 +162,14 @@ async def call_prospect(request_data: dict = None):
 
         client = Client(api_key_sid, api_key_secret, account_sid)
 
-        # Route Twilio stream to local bot via ngrok
-        # Pipecat Cloud's Twilio WS handler conflicts with our bot's parser,
-        # so we route directly to the local bot's /ws endpoint
-        bot_ws_url = os.environ.get("BOT_WS_URL", "")
-        if not bot_ws_url:
-            return JSONResponse(
-                {"error": "BOT_WS_URL not set. Run: ngrok http 7860 and set BOT_WS_URL in .env"},
-                status_code=400,
-            )
-
+        # TwiML connects the call to our Pipecat Cloud bot via WebSocket
         twiml = (
             '<?xml version="1.0" encoding="UTF-8"?>'
             "<Response>"
             "<Connect>"
-            f'<Stream url="{bot_ws_url}">'
+            '<Stream url="wss://api.pipecat.daily.co/ws/twilio">'
+            '<Parameter name="_pipecatCloudServiceHost" value="sales-bot.hakcathon"/>'
+            '<Parameter name="_pipecatCloudServiceKey" value="pk_f3f0aa23-28ac-4b3b-88ca-9e7c57789c8d"/>'
             "</Stream>"
             "</Connect>"
             "</Response>"
