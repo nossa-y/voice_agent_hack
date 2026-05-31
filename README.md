@@ -2,7 +2,7 @@
 
 A self-improving outbound voice agent that learns from failed cold calls.
 
-**Demo video:** TODO
+**Demo video:** [demo](https://www.canva.com/design/DAHLMCHooi0/L_MI1XWENAVp5u6qw2qpvA/edit?ui=e30)
 
 The demo focuses on a real voice-agent failure: the agent calls a company, asks for a specific decision maker, misunderstands the gatekeeper, starts pitching too early, and gets hung up on. Cekura turns that failed call into structured feedback, Nemotron rewrites the prompt, and the same scenario is rerun to show improved behavior.
 
