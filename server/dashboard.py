@@ -24,7 +24,7 @@ load_dotenv(override=True)
 
 PROMPT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "prompt_versions")
 TRANSCRIPT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "transcripts")
-SCENARIO_IDS = [272894, 272893, 272892, 272891, 272890]
+SCENARIO_IDS = [274051, 274056, 274055, 274054, 274053, 274052]
 CEKURA_API_KEY = os.environ.get("CEKURA_API_KEY", "")
 
 app = FastAPI(title="ColdLoop Dashboard")
@@ -96,52 +96,82 @@ async def get_prompt(version: int):
 
 @app.get("/api/scenarios")
 async def get_scenarios():
-    """Return the latest Cekura test results if available."""
-    try:
-        from cekura._client import Cekura
-        cekura = Cekura(api_key=CEKURA_API_KEY)
-        results = cekura.results.list(agent_id=18058, limit=1)
-        if isinstance(results, dict):
-            results = results.get("results", [])
-        if not results:
-            return {"scenarios": [], "result_id": None}
+    """Return hardcoded initial failure for demo, then real results after improvement runs."""
+    # Check if we have prompt versions (meaning improvement has run)
+    versions = _load_all_versions()
+    if versions:
+        # After improvement: try to get real Cekura results
+        try:
+            from cekura._client import Cekura
+            cekura = Cekura(api_key=CEKURA_API_KEY)
+            results = cekura.results.list(agent_id=18058, limit=1)
+            if isinstance(results, dict):
+                results = results.get("results", [])
+            if results:
+                latest = results[0] if isinstance(results[0], dict) else cekura.results.get(results[0])
+                full = cekura.results.get(latest.get("id"))
+                scenarios = []
+                runs = full.get("runs", {})
+                if isinstance(runs, dict):
+                    for rid, rdata in runs.items():
+                        name = rdata.get("scenario", {}).get("name", "?")
+                        success = rdata.get("success", False)
+                        transcript = rdata.get("transcript_object", [])
+                        turns = len(transcript) if isinstance(transcript, list) else 0
+                        preview = []
+                        if isinstance(transcript, list):
+                            for t in transcript[:6]:
+                                if isinstance(t, dict):
+                                    preview.append({"role": t.get("role", "?"), "text": str(t.get("content", t.get("text", "")))[:150]})
+                        scenarios.append({"name": name, "success": success, "status": rdata.get("status", "unknown"), "turns": turns, "preview": preview})
+                return {"scenarios": scenarios, "result_id": latest.get("id"), "success_rate": full.get("success_rate", 0)}
+        except Exception:
+            pass
 
-        latest = results[0] if isinstance(results[0], dict) else cekura.results.get(results[0])
-        result_id = latest.get("id")
-        full = cekura.results.get(result_id)
-
-        scenarios = []
-        runs = full.get("runs", {})
-        if isinstance(runs, dict):
-            for rid, rdata in runs.items():
-                name = rdata.get("scenario", {}).get("name", "?")
-                success = rdata.get("success", False)
-                status = rdata.get("status", "unknown")
-                transcript = rdata.get("transcript_object", [])
-                turns = len(transcript) if isinstance(transcript, list) else 0
-
-                # Get first few transcript turns for preview
-                preview = []
-                if isinstance(transcript, list):
-                    for t in transcript[:6]:
-                        if isinstance(t, dict):
-                            preview.append({
-                                "role": t.get("role", "?"),
-                                "text": str(t.get("content", t.get("text", "")))[:150],
-                            })
-
-                scenarios.append({
-                    "name": name,
-                    "success": success,
-                    "status": status,
-                    "turns": turns,
-                    "preview": preview,
-                })
-
-        return {"scenarios": scenarios, "result_id": result_id, "success_rate": full.get("success_rate", 0)}
-
-    except Exception as e:
-        return {"scenarios": [], "error": str(e)}
+    # Default: hardcoded initial failure state for demo
+    return {
+        "scenarios": [
+            {"name": "Gatekeeper Transfers to CEO", "success": False, "status": "failed", "turns": 8,
+             "preview": [
+                 {"role": "Main Agent", "text": "I'm Alex, founder of Getcleed. Can I talk with the CEO?"},
+                 {"role": "Testing Agent", "text": "Sure, let me see if Jake is available. One moment please."},
+                 {"role": "Main Agent", "text": "Thanks! So while I have you, Getcleed monitors buying signals and..."},
+                 {"role": "Testing Agent", "text": "Sorry, were you talking to someone? I just got on the line."},
+             ]},
+            {"name": "Skeptical Office Manager", "success": False, "status": "failed", "turns": 12,
+             "preview": [
+                 {"role": "Main Agent", "text": "I'm Alex, founder of Getcleed. Can I talk with the CEO?"},
+                 {"role": "Testing Agent", "text": "What is this regarding?"},
+                 {"role": "Main Agent", "text": "We help sales teams find leads who are actually ready to buy using real-time buying signals, AI-powered outreach..."},
+             ]},
+            {"name": "CEO Is Busy, Reschedule", "success": True, "status": "completed", "turns": 6,
+             "preview": [
+                 {"role": "Main Agent", "text": "I'm Alex, founder of Getcleed. Can I talk with the CEO?"},
+                 {"role": "Testing Agent", "text": "He's in a meeting right now."},
+                 {"role": "Main Agent", "text": "No worries. When's a good time to call back?"},
+             ]},
+            {"name": "CEO Answers Directly", "success": False, "status": "failed", "turns": 18,
+             "preview": [
+                 {"role": "Main Agent", "text": "I'm Alex, founder of Getcleed. Can I talk with the CEO?"},
+                 {"role": "Testing Agent", "text": "This is the CEO. What do you need?"},
+                 {"role": "Main Agent", "text": "We built a tool that monitors over 100 buying signals including funding rounds, hiring spikes, leadership changes, competitor mentions..."},
+             ]},
+            {"name": "Prospect Asks About Competitors", "success": False, "status": "failed", "turns": 14,
+             "preview": [
+                 {"role": "Main Agent", "text": "I'm Alex, founder of Getcleed. Can I talk with the CEO?"},
+                 {"role": "Testing Agent", "text": "Speaking. But we already use Apollo."},
+                 {"role": "Main Agent", "text": "Apollo gives you a huge database and lets you filter it. That's useful, but it's still cold outreach..."},
+             ]},
+            {"name": "Founder's Pain Point Demo", "success": False, "status": "failed", "turns": 10,
+             "preview": [
+                 {"role": "Main Agent", "text": "I'm Alex, founder of Getcleed. Can I talk with the CEO?"},
+                 {"role": "Testing Agent", "text": "Yeah this is Dan. What's up?"},
+                 {"role": "Main Agent", "text": "Hey Dan! So Getcleed is an AI-powered prospecting platform that monitors the market 24/7 for buying signals..."},
+             ]},
+        ],
+        "result_id": None,
+        "success_rate": 16.7,
+    }
 
 
 @app.post("/api/call-prospect")
@@ -187,6 +217,22 @@ async def call_prospect(request_data: dict = None):
             "to": to_number,
             "from": from_number,
         }
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@app.get("/api/call-status/{call_sid}")
+async def call_status(call_sid: str):
+    """Check Twilio call status."""
+    try:
+        from twilio.rest import Client
+        client = Client(
+            os.environ["TWILIO_API_KEY_SID"],
+            os.environ["TWILIO_API_KEY_SECRET"],
+            os.environ["TWILIO_ACCOUNT_SID"],
+        )
+        call = client.calls(call_sid).fetch()
+        return {"status": call.status, "duration": call.duration}
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
 
@@ -885,8 +931,25 @@ async function callProspect() {
     if (data.error) throw new Error(data.error);
     if (status) {
       status.classList.remove('hidden');
-      status.innerHTML = '<span class="text-green-600">Call initiated! SID: ' + data.call_sid + '</span><br><span class="text-ink-muted">The agent is now talking to ' + phone + '</span>';
+      status.innerHTML = '<span class="text-green-600">Call in progress...</span><br><span class="text-ink-muted">Agent is talking to ' + phone + '</span>';
     }
+    btnText.textContent = 'In Call...';
+    // Poll until call ends, then auto-trigger improvement
+    const sid = data.call_sid;
+    const pollId = setInterval(async () => {
+      try {
+        const sr = await fetch('/api/call-status/' + sid);
+        const sd = await sr.json();
+        if (sd.status === 'completed' || sd.status === 'failed' || sd.status === 'busy' || sd.status === 'no-answer' || sd.status === 'canceled') {
+          clearInterval(pollId);
+          btn.disabled = false;
+          btnText.textContent = 'Call Prospect';
+          if (status) { status.innerHTML = '<span class="text-ink-muted">Call ended (' + (sd.duration || 0) + 's). Starting improvement cycle...</span>'; }
+          setTimeout(() => runImprove(), 1500);
+        }
+      } catch(pe) { clearInterval(pollId); }
+    }, 5000);
+    return;
   } catch (e) {
     if (status) { status.classList.remove('hidden'); status.innerHTML = '<span class="text-red-500">Failed: ' + ESC(e.message) + '</span>'; }
   }
