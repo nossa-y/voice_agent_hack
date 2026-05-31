@@ -96,39 +96,7 @@ async def get_prompt(version: int):
 
 @app.get("/api/scenarios")
 async def get_scenarios():
-    """Return hardcoded initial failure for demo, then real results after improvement runs."""
-    # Check if we have prompt versions (meaning improvement has run)
-    versions = _load_all_versions()
-    if versions:
-        # After improvement: try to get real Cekura results
-        try:
-            from cekura._client import Cekura
-            cekura = Cekura(api_key=CEKURA_API_KEY)
-            results = cekura.results.list(agent_id=18058, limit=1)
-            if isinstance(results, dict):
-                results = results.get("results", [])
-            if results:
-                latest = results[0] if isinstance(results[0], dict) else cekura.results.get(results[0])
-                full = cekura.results.get(latest.get("id"))
-                scenarios = []
-                runs = full.get("runs", {})
-                if isinstance(runs, dict):
-                    for rid, rdata in runs.items():
-                        name = rdata.get("scenario", {}).get("name", "?")
-                        success = rdata.get("success", False)
-                        transcript = rdata.get("transcript_object", [])
-                        turns = len(transcript) if isinstance(transcript, list) else 0
-                        preview = []
-                        if isinstance(transcript, list):
-                            for t in transcript[:6]:
-                                if isinstance(t, dict):
-                                    preview.append({"role": t.get("role", "?"), "text": str(t.get("content", t.get("text", "")))[:150]})
-                        scenarios.append({"name": name, "success": success, "status": rdata.get("status", "unknown"), "turns": turns, "preview": preview})
-                return {"scenarios": scenarios, "result_id": latest.get("id"), "success_rate": full.get("success_rate", 0)}
-        except Exception:
-            pass
-
-    # Default: hardcoded initial failure state for demo
+    """Return hardcoded failure scenarios for demo."""
     return {
         "scenarios": [
             {"name": "Gatekeeper Transfers to CEO", "success": False, "status": "failed", "turns": 8,
@@ -860,36 +828,8 @@ async function runImprove() {
 loadData();
 setInterval(loadData, 30000);
 
-async function startCall() {
-  const btn = document.getElementById('callBtn');
-  const btn2 = document.getElementById('callBtn2');
-  const status = document.getElementById('callStatus');
-  const area = document.getElementById('callArea');
-  const embed = document.getElementById('callEmbed');
-  const frame = document.getElementById('callFrame');
-
-  if (btn) { btn.disabled = true; btn.textContent = 'Connecting...'; }
-  if (btn2) { btn2.disabled = true; btn2.textContent = 'Connecting...'; }
-  if (status) { status.classList.remove('hidden'); status.textContent = 'Starting session...'; }
-
-  try {
-    const res = await fetch('/api/start-session', { method: 'POST' });
-    const data = await res.json();
-    if (data.error) throw new Error(data.error);
-
-    // Embed Daily prebuilt UI
-    const roomUrl = data.room_url;
-    const token = data.token;
-    frame.src = roomUrl + '?t=' + token + '&prejoin=false';
-    area.querySelector('p').classList.add('hidden');
-    if (btn2) btn2.classList.add('hidden');
-    embed.classList.remove('hidden');
-    if (status) { status.classList.remove('hidden'); status.textContent = 'Connected - speak to the agent!'; }
-  } catch (e) {
-    if (status) { status.classList.remove('hidden'); status.innerHTML = '<span class="text-red-400">Failed: ' + e.message + '</span>'; }
-  }
-  if (btn) { btn.disabled = false; btn.textContent = 'Try the Agent'; }
-  if (btn2) { btn2.disabled = false; btn2.textContent = 'Start Call'; }
+function startCall() {
+  window.open('http://localhost:7860', '_blank');
 }
 
 function endCall() {

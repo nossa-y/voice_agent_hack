@@ -1,111 +1,84 @@
-# Getcleed Voice Agent - Self-Improving AI Cold Caller
+# Getcleed Voice Agent
 
-An AI voice agent that makes outbound sales calls, evaluates its own performance with Cekura, and rewrites its own system prompt using Nemotron to get better after every call. No human in the loop.
+A self-improving outbound voice agent that learns from failed cold calls.
 
-**Built at the YC Voice Agents Hackathon (May 30, 2026)**
+**Demo video:** TODO
 
-## What it does
+The demo focuses on a real voice-agent failure: the agent calls a company, asks for a specific decision maker, misunderstands the gatekeeper, starts pitching too early, and gets hung up on. Cekura turns that failed call into structured feedback, Nemotron rewrites the prompt, and the same scenario is rerun to show improved behavior.
 
-The agent calls real phone numbers via Twilio, pitches Getcleed (an AI-powered lead scoring platform), and tries to get past the gatekeeper to talk with the CEO. After each batch of calls, Cekura runs 5 automated test scenarios against the agent, scores them on expected outcomes, and feeds the transcripts + scores to Nemotron 3 Super 120B for self-reflection. Nemotron analyzes what went wrong, generates an improved system prompt, and the next round of calls uses the new prompt. The agent literally rewrites its own playbook.
+## Sponsor Stack
 
-## How we used sponsor tools
+| Tool | Role in the system |
+| --- | --- |
+| NVIDIA Nemotron 3 Super 120B | Live conversation LLM and post-call reflection model. |
+| NVIDIA Nemotron Speech | Streaming STT for phone/browser audio. |
+| Pipecat | Voice runtime across browser WebRTC, Pipecat Cloud, and Twilio media streams. |
+| Cekura | Scenario runner and evaluator that produces transcript-grounded feedback. |
+| Gradium | Low-latency TTS for the spoken agent voice. |
+| Twilio | Outbound phone calls to real numbers. |
 
-### NVIDIA Nemotron 3 Super 120B (LLM + Self-Reflection)
-- **Conversation engine:** Powers all voice conversations via vLLM-served OpenAI-compatible endpoint. Handles discovery, objection handling, and demo booking in real time.
-- **Self-reflection engine:** The same model analyzes its own call transcripts after Cekura evaluation, identifies failure patterns (wrong name, too pushy, missed signals), and generates an improved system prompt. The model improves itself.
-- **STT:** Nemotron Speech Streaming for real-time speech-to-text over WebSocket.
+## Infrastructure
 
-### Cekura (Evaluation + Testing)
-- **Automated test scenarios:** 5 AI-generated test personas that call our agent with different objection styles, edge cases, and personality types.
-- **Pass/fail scoring:** Each scenario has expected outcomes (did the agent qualify? handle objections? book a demo?). Cekura grades every call.
-- **Improvement loop driver:** Cekura scores feed directly into Nemotron's self-reflection prompt. The agent sees exactly which scenarios it failed and why.
-- **Pipecat integration:** Cekura connects to our Pipecat Cloud deployment via WebRTC to run automated test calls.
-
-### Pipecat (Voice Agent Framework)
-- **Pipeline orchestration:** STT -> LLM -> TTS pipeline with tool calling (prospect lookup, product details, competitor comparison, demo scheduling).
-- **Pipecat Cloud:** Production deployment with auto-scaling. Both Cekura test calls and real Twilio calls route here.
-- **Transport flexibility:** SmallWebRTC for local dev, Daily WebRTC for cloud, Twilio WebSocket for phone calls - same bot code handles all three.
-
-### Gradium (TTS)
-- **Voice synthesis:** Converts LLM responses to natural speech in real time. Low latency for conversational flow.
-
-### Twilio (Telephony)
-- **Outbound calling:** Agent initiates real phone calls via Twilio REST API.
-- **Media Streams:** Bidirectional WebSocket audio streaming connects Twilio calls to Pipecat Cloud.
-- **Phone number:** US number (+1) calling international prospects.
-
-### AWS
-- **NVIDIA model hosting:** Nemotron 3 Super 120B and Nemotron Speech Streaming hosted on AWS infrastructure provided for the hackathon.
-
-## Architecture
-
-```
-                    IMPROVEMENT LOOP
-                    ================
-
-  +-----------+     +-----------+     +-------------+
-  |  Twilio   |---->|  Pipecat  |---->|  Nemotron   |
-  |  (call)   |     |  Cloud    |     |  LLM 120B   |
-  +-----------+     +-----------+     +-------------+
-                         |                   |
-                         v                   v
-                    +-----------+     +-------------+
-                    |  Cekura   |     |  Gradium    |
-                    |  (eval)   |     |  TTS        |
-                    +-----------+     +-------------+
-                         |
-                         v
-                    +-------------------+
-                    |  Nemotron         |
-                    |  Self-Reflection  |
-                    |  (same model)     |
-                    +-------------------+
-                         |
-                         v
-                    +-------------------+
-                    |  Improved Prompt  |
-                    |  v0 -> v1 -> v2   |
-                    +-------------------+
-                         |
-                         v
-                    Next calls use
-                    the better prompt
+```mermaid
+flowchart LR
+    Caller["Person answers phone"] --> Agent["Getcleed voice agent"]
+    Agent --> Result["Call transcript"]
+    Result --> Judge["Cekura gives feedback"]
+    Judge --> Coach["Nemotron rewrites prompt"]
+    Coach --> Better["Better next call"]
+    Better --> Agent
 ```
 
-## The self-improvement loop
+## Improvement Loop
 
-1. **Agent makes calls** with current prompt (v0)
-2. **Cekura runs 5 test scenarios** - simulated prospects with different personas
-3. **Cekura scores each call** - did the agent qualify? handle objections? book a demo?
-4. **Nemotron analyzes the transcripts** - reads its own failures, identifies patterns
-5. **Nemotron generates improved prompt** (v1) - adds specific fixes for what went wrong
-6. **Next calls use v1** - repeat from step 2
-7. **Prompt diffs are visible** - you can see exactly what changed and why
+The important artifact is the feedback, not just the score. Cekura returns the scenario, expected outcome, transcript, pass/fail result, and explanation. That becomes input to Nemotron, which patches the prompt and saves a new version that the next call uses.
 
-## Dashboard
+**Before reflection**
 
-The web dashboard at `localhost:8501` shows the full loop in action:
-- **Talk to the Agent** - WebRTC call or real phone call via Twilio
-- **Evolution History** - prompt versions with Cekura scores
-- **Prompt Diff** - exact changes between versions
-- **Cekura Test Results** - pass/fail for each scenario with transcript previews
-- **Run Improvement** - triggers a full eval + reflection cycle (3-5 min)
+```text
+Agent: I'm Alex, founder of Getcleed. Can I talk with the CEO?
+Gatekeeper: Who are you trying to reach?
+Agent: We help sales teams monitor buying signals...
+Gatekeeper: Not interested.
+```
 
-## Quick start
+Failure: the agent treats the gatekeeper like the buyer, pitches too early, and never clarifies the target decision maker.
+
+**After reflection**
+
+```text
+Agent: I'm Alex, founder of Getcleed. Is Maya Patel available?
+Gatekeeper: What's this about?
+Agent: I'm a founder reaching out to Maya about outbound strategy. Is she around?
+Gatekeeper: She's in a meeting.
+Agent: No problem. When is a better time to try her?
+```
+
+Improvement: the agent asks for the specific person, answers the gatekeeper briefly, avoids pitching, and preserves the chance to reach the buyer later.
+
+## Repo Map
+
+- `server/bot-sales.py` - voice agent, tools, prompt loading, transcript capture
+- `server/dashboard.py` - local dashboard for calls, Cekura results, prompt diffs, and improvement runs
+- `server/improve.py` - CLI improvement loop from transcripts or Cekura feedback
+- `server/sales_backend.py` - mock product, prospect, competitor, and scheduling data
+- `server/prompt_versions/` - saved prompt versions
+
+## Run Locally
 
 ```bash
 cd server
 cp .env.example .env
-# Fill in API keys
 uv sync
 
-# Run the dashboard (includes call + improvement UI)
-uv run dashboard.py     # http://localhost:8501
-
-# Or run just the voice agent
-uv run bot-sales.py     # http://localhost:7860
+UV_CACHE_DIR=.uv-cache uv run dashboard.py
 ```
 
-## Team
+Open `http://localhost:8501`.
 
-- Nossa Iyamu - Founder of Getcleed, Canopy @ Founders Inc
+Useful commands:
+
+```bash
+UV_CACHE_DIR=.uv-cache uv run bot-sales.py
+UV_CACHE_DIR=.uv-cache uv run improve.py --status
+```
