@@ -1,4 +1,4 @@
-# Getcleed Voice Agent
+# Coldloop Voice Agent
 
 A self-improving outbound voice agent that learns from failed cold calls.
 
